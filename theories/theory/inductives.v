@@ -1,5 +1,6 @@
-Require Export HoTT.Basics.Overture.
-Require Import HoTT.Types.Bool.
+Require HoTT.
+Import HoTT.Basics.
+Import HoTT.Types.Bool.
 
 Global Set Automatic Introduction.
 Global Set Automatic Coercions Import.
@@ -8,16 +9,85 @@ Hint Resolve tt : core.
 (* Set Printing Universes. *)
 Open Scope list_scope.
 
+Context {funext : Funext}.
+
 Inductive Acc {A : Type} (R : A -> A -> Type) (x : A) : Type :=
   Acc_in : (forall y, R y x -> Acc R y) -> Acc R x.
 
 Module Simple.
-  (*
-    Inductive types with 1 index and 1 constructor.
-    A parametric inductive type is a function from the parameters to an inductive type.
-    Multiple indices and constructors can be represented with Σ types.
-    Not sure about mutual inductive types, nested inductive types and even inductive-inductive types but that might work too.
-   *)
+
+  Record InductiveS (index : Type) :=
+    { nonrec : Type;
+      positive_dom : nonrec -> Type;
+      positive : forall x, positive_dom x -> index;
+      output : nonrec -> index }.
+  Arguments nonrec {index} _.
+  Arguments positive_dom {index} _ _.
+  Arguments positive {index} _ _ _.
+  Arguments output {index} _ _.
+
+  Section WithS.
+    Context {index : Type}.
+    Variable (S : InductiveS index).
+
+    Inductive IndT : index -> Type :=
+      IndC : forall x : nonrec S,
+        (forall y : positive_dom S x, IndT (positive S x y)) ->
+        IndT (output S x).
+
+    Definition criterion := forall x y, IsEquiv (@ap _ _ (output S) x y).
+
+    Theorem criterion_hprop (Hc : criterion) : forall i, IsHProp (IndT i).
+    Proof.
+      intros i;apply hprop_allpath.
+      revert i.
+      cut (forall i (x : IndT i) j (y : IndT j) (e : i = j), e # x = y);
+        [intros E i x y;exact (E i x i y idpath)|].
+      induction x as [a x IH]; destruct y as [b y].
+      apply (@equiv_ind _ _ _ (Hc _ _)).
+      intros e;destruct e;simpl.
+      apply ap.
+      apply path_forall;intro k.
+      exact (IH _ _ _ idpath).
+    Qed.
+
+  End WithS.
+
+  Module Examples.
+    Module Path.
+      Definition pathS {A : Type} (a : A) : InductiveS A :=
+        {| nonrec := Unit;
+           positive_dom := fun _ => Empty;
+           positive := fun x y => match y with end;
+           output := fun _ => a |}.
+
+      Definition path {A} a := IndT (@pathS A a).
+
+      Definition idpath {A} a : @path A a a
+        := IndC (pathS a) tt (fun y => match y with end).
+
+      Definition path_rect : forall (A : Type) (a : A) (P : forall b : A, path a b -> Type),
+          P a (idpath a) -> forall (b : A) (p : path a b), P b p.
+      Proof.
+        intros A a P Hrefl.
+        apply IndT_rect;simpl.
+        intros [] m _.
+        refine (transport (fun m => P a (IndC (pathS a) tt m)) _ Hrefl).
+        apply path_forall;intros [].
+      Defined.
+
+      Definition path_rect_compute : forall A a P H, path_rect A a P H a (idpath a) = H.
+      Proof.
+        intros;simpl.
+        set (pforall := path_forall _ _ _);clearbody pforall.
+        destruct (path_ishprop Overture.idpath pforall).
+        simpl. reflexivity.
+      Qed.
+    End Path.
+  End Examples.
+End Simple.
+
+Module Complex.
 
   Section VarSec.
 
@@ -126,6 +196,77 @@ Module Simple.
   Arguments ind_computes {index T spec} i P arg.
   Arguments Build_IsInductive {index T spec ind_c ind_recursor} ind_computes.
 
+  Definition unindex : forall index (spec : @ConstrS index), index -> @ConstrS Unit.
+  Proof.
+    intros index c i;induction c as [A f IHf | p c IHc | i'].
+    - refine (ConstrUniform A _).
+      auto.
+    - refine (ConstrPositive _ IHc).
+      clear IHc c;induction p as [i' | A f IHf].
+      + refine (PositiveFunc (i = i') _).
+        intros _;apply PositiveFinal;exact tt.
+      + refine (PositiveFunc A _).
+        auto.
+    - apply (ConstrUniform (i = i')).
+      intros _;apply (ConstrFinal tt).
+  Defined.
+
+  Section Morphism.
+    Context {index : Type} {A B : index -> Type}.
+    Variable F : forall i, A i -> B i.
+
+    Fixpoint Fpos spec : positiveT A spec -> positiveT B spec
+      := match spec return positiveT A spec -> positiveT B spec with
+         | PositiveFinal i =>
+           fun p =>
+             F _ p
+         | PositiveFunc A f =>
+           fun p x =>
+             Fpos (f x) (p x)
+         end.
+
+    Fixpoint is_morphism spec : constrT A spec -> constrT B spec -> Type
+      := match spec return constrT A spec -> constrT B spec -> Type with
+         | ConstrUniform A f =>
+           fun cA cB =>
+             forall x, is_morphism (f x) (cA x) (cB x)
+         | ConstrPositive pos spec =>
+           fun cA cB =>
+             forall x, is_morphism spec (cA x) (cB (Fpos pos x))
+         | ConstrFinal i =>
+           fun cA cB =>
+             F _ cA = cB
+         end.
+
+  End Morphism.
+
+  Section LoopMorphism.
+    Context {funxext : Funext}.
+    Context {index : Type} {A : index -> Type}.
+    Variable F : forall i, A i -> A i.
+
+    Lemma loop_is_id : forall spec c (rec: recursor c), is_morphism F spec c c ->
+                                                        forall i x, F i x = x.
+    Proof.
+      intros spec c rec H.
+      apply rec.
+      clear rec.
+      induction spec;simpl;auto.
+      intros v arg.
+      apply IHspec.
+      simpl in *.
+      assert (Fpos F p v = v).
+      - clear IHspec H.
+        induction p;simpl in *;auto.
+        apply path_forall. intros x.
+        auto.
+      - assert (E := H v).
+        rewrite X in E;trivial.
+    Qed.
+
+
+  End LoopMorphism.
+
   Module Examples.
 
     Module Nat.
@@ -201,6 +342,7 @@ Module Simple.
 
     Module Acc.
       Section VarSec.
+        Context {funext : Funext}.
         Variables (A : Type) (R : A -> A -> Type).
 
         Definition AccS
@@ -217,8 +359,30 @@ Module Simple.
           := fun _ _ _ _ => idpath.
 
         Definition Acc_is_ind := Build_IsInductive Acc_is_recursor.
+
+        Inductive Acc' (i : A) : Unit -> Type :=
+          Acc_in' : forall a : A, (forall a0, R a0 a -> i = a0 -> Acc' i tt) -> i = a -> Acc' i tt.
+
+        Definition Acc'_is_recursor : forall x, @is_recursor _ _ (unindex _ AccS x) _ (Acc'_rect x)
+          := fun _ _ _ _ _ _ => idpath.
+
+        Lemma Acc'_inv : forall x, (R x x -> Empty) -> Acc' x tt.
+        Proof.
+          intros x Hx;apply (Acc_in' x x).
+          - intros y Hr e;destruct e.
+            destruct (Hx Hr).
+          - reflexivity.
+        Qed.
+
+        Lemma Acc'_irrefl : forall x i, Acc' x i -> R x x -> Empty.
+        Proof.
+          intros x i Hx Hr;induction Hx as [y _ IHx p].
+          destruct p.
+          eauto.
+        Qed.
+
       End VarSec.
     End Acc.
 
   End Examples.
-End Simple.
+End Complex.
