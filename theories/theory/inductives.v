@@ -217,22 +217,7 @@ Module Complex.
   Arguments ind_computes {index T spec} i P arg.
   Arguments Build_IsInductive {index T spec ind_c ind_recursor} ind_computes.
 
-  Definition unindex : forall index (spec : @ConstrS index), index -> @ConstrS Unit.
-  Proof.
-    intros index c i;induction c as [A f IHf | p c IHc | i'].
-    - refine (ConstrUniform A _).
-      auto.
-    - refine (ConstrPositive _ IHc).
-      clear IHc c;induction p as [i' | A f IHf].
-      + refine (PositiveFunc (i = i') _).
-        intros _;apply PositiveFinal;exact tt.
-      + refine (PositiveFunc A _).
-        auto.
-    - apply (ConstrUniform (i = i')).
-      intros _;apply (ConstrFinal tt).
-  Defined.
-
-  Section Morphism.
+  Section IsMorphism.
     Context {index : Type} {A B : index -> Type}.
     Variable F : forall i, A i -> B i.
 
@@ -258,6 +243,37 @@ Module Complex.
            fun cA cB =>
              F _ cA = cB
          end.
+
+  End IsMorphism.
+
+  Section Morphism.
+    Context {index:Type} {A B : index -> Type}.
+
+    Fixpoint ih_of_pos spec : forall r : positiveT A spec,
+        induction_hyp_of_pos A (fun i _ => B i) spec r -> positiveT B spec
+      := match spec return forall r : positiveT A spec,
+             induction_hyp_of_pos A (fun i _ => B i) spec r -> positiveT B spec with
+         | PositiveFunc T f =>
+           fun r ih x => ih_of_pos (f x) (r x) (ih x)
+         | PositiveFinal i =>
+           fun r ih => ih
+         end.
+
+    Fixpoint rec_arg_of_constr spec : forall (cA : constrT A spec) (cB : constrT B spec),
+        rec_arg A (fun i _ => B i) spec cA
+      := match spec return forall (cA : constrT A spec) (cB : constrT B spec),
+             rec_arg A (fun i _ => B i) spec cA with
+         | ConstrUniform T f =>
+           fun cA cB x => rec_arg_of_constr (f x) (cA x) (cB x)
+         | ConstrPositive pos spec =>
+           fun cA cB r ih => rec_arg_of_constr spec (cA r) (cB (ih_of_pos pos r ih))
+         | ConstrFinal i =>
+           fun cA cB => cB
+         end.
+
+    Definition default_morphism (spec : ConstrS index)
+      (cA : constrT A spec) (rec: recursor cA) (cB: constrT B spec) : forall i, A i -> B i
+      := rec _ (rec_arg_of_constr spec cA cB).
 
   End Morphism.
 
@@ -381,27 +397,6 @@ Module Complex.
 
         Definition Acc_is_ind := Build_IsInductive Acc_is_recursor.
 
-        Inductive Acc' (i : A) : Unit -> Type :=
-          Acc_in' : forall a : A, (forall a0, R a0 a -> i = a0 -> Acc' i tt) -> i = a -> Acc' i tt.
-
-        Definition Acc'_is_recursor : forall x, @is_recursor _ _ (unindex _ AccS x) _ (Acc'_rect x)
-          := fun _ _ _ _ _ _ => idpath.
-
-        Lemma Acc'_inv : forall x, (R x x -> Empty) -> Acc' x tt.
-        Proof.
-          intros x Hx;apply (Acc_in' x x).
-          - intros y Hr e;destruct e.
-            destruct (Hx Hr).
-          - reflexivity.
-        Qed.
-
-        Lemma Acc'_irrefl : forall x i, Acc' x i -> R x x -> Empty.
-        Proof.
-          intros x i Hx Hr;induction Hx as [y _ IHx p].
-          destruct p.
-          eauto.
-        Qed.
-
       End VarSec.
     End Acc.
 
@@ -486,6 +481,15 @@ Module Compile.
            fun p _ => p
          end.
 
+    Fixpoint simple_positiveT (T : index -> Type) (spec : PositiveS index)
+      : (forall x, T (reciota_of spec x)) -> positiveT T spec
+      := match spec return (forall x, T (reciota_of spec x)) -> positiveT T spec with
+         | PositiveFunc A f =>
+           fun p x => simple_positiveT T (f x) (fun y => p (x;y))
+         | PositiveFinal i =>
+           fun p => p tt
+         end.
+
     Fixpoint complex_one_constrT (T:index -> Type) (spec : ConstrS index)
       : IndConstrT T _ _ (indreciota_of spec) (iota_of spec) ->
         constrT T spec
@@ -509,6 +513,19 @@ Module Compile.
 
     Definition complex_constrT (spec : ConstrS index) : constrT (IndT (of_constrS spec)) spec
       := complex_one_constrT (IndT _) spec (IndC (of_constrS _)).
+
+    Fixpoint simple_one_constrT (T : index -> Type) (spec : ConstrS index)
+      : constrT T spec -> IndConstrT T _ _ (indreciota_of spec) (iota_of spec)
+      := match spec return constrT T spec -> IndConstrT T _ _ (indreciota_of spec) (iota_of spec) with
+         | ConstrUniform A f =>
+           fun c x args => simple_one_constrT T (f _) (c _) x.2 args
+         | ConstrPositive pos spec =>
+           fun c x args =>
+             let posv := simple_positiveT T pos (fun y => args (inl y)) in
+             simple_one_constrT T spec (c posv) _ (fun y => args (inr y))
+         | ConstrFinal i =>
+           fun c _ _ => c
+         end.
 
 
   End VarSec.
