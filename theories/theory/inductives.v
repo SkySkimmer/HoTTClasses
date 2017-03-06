@@ -16,26 +16,45 @@ Inductive Acc {A : Type} (R : A -> A -> Type) (x : A) : Type :=
 
 Module Simple.
 
+  Record RecursiveS (index : Type) (nonrec : Type) :=
+    mkRecS { recdomain : nonrec -> Type;
+             reciota : forall x, recdomain x -> index }.
+  Arguments mkRecS {index nonrec} recdomain reciota.
+  Arguments recdomain {index nonrec} _ _.
+  Arguments reciota {index nonrec} _ _ _.
+
   Record InductiveS (index : Type) :=
-    { nonrec : Type;
-      positive_dom : nonrec -> Type;
-      positive : forall x, positive_dom x -> index;
-      output : nonrec -> index }.
+    mkIndS { nonrec : Type;
+             positive : RecursiveS index nonrec;
+             iota : nonrec -> index }.
+  Arguments mkIndS {index} nonrec positive iota.
   Arguments nonrec {index} _.
-  Arguments positive_dom {index} _ _.
-  Arguments positive {index} _ _ _.
-  Arguments output {index} _ _.
+  Arguments positive {index} _.
+  Arguments iota {index} _ _.
+
+  Definition mkIndS' {index} nonrec recdomain reciota iota :=
+    @mkIndS index nonrec (mkRecS recdomain reciota) iota.
+
+  Definition indrecdomain {index} (S : InductiveS index) a := recdomain (positive S) a.
+  Definition indreciota {index} (S : InductiveS index) a (b : indrecdomain S a)
+    := reciota (positive S) a b.
+
+  Arguments indrecdomain {index} S / a.
+  Arguments indreciota {index} S / a b.
 
   Section WithS.
     Context {index : Type}.
     Variable (S : InductiveS index).
 
-    Inductive IndT : index -> Type :=
-      IndC : forall x : nonrec S,
-        (forall y : positive_dom S x, IndT (positive S x y)) ->
-        IndT (output S x).
+    Definition IndConstrT (A : index -> Type) nonrec recdomain reciota iota
+      := forall x : nonrec,
+      (forall y : recdomain x, A (reciota x y)) ->
+      A (iota x).
 
-    Definition criterion := forall x y, IsEquiv (@ap _ _ (output S) x y).
+    Inductive IndT : index -> Type :=
+      IndC : IndConstrT IndT (nonrec S) (indrecdomain S) (indreciota S) (iota S).
+
+    Definition criterion := forall x y, IsEquiv (@ap _ _ (iota S) x y).
 
     Theorem criterion_hprop (Hc : criterion) : forall i, IsHProp (IndT i).
     Proof.
@@ -57,9 +76,9 @@ Module Simple.
     Module Path.
       Definition pathS {A : Type} (a : A) : InductiveS A :=
         {| nonrec := Unit;
-           positive_dom := fun _ => Empty;
-           positive := fun x y => match y with end;
-           output := fun _ => a |}.
+           positive := {| recdomain := fun _ => Empty;
+                          reciota := fun x y => match y with end |};
+           iota := fun _ => a |}.
 
       Definition path {A} a := IndT (@pathS A a).
 
@@ -67,7 +86,7 @@ Module Simple.
         := IndC (pathS a) tt (fun y => match y with end).
 
       Definition path_rect : forall (A : Type) (a : A) (P : forall b : A, path a b -> Type),
-          P a (idpath a) -> forall (b : A) (p : path a b), P b p.
+        P a (idpath a) -> forall (b : A) (p : path a b), P b p.
       Proof.
         intros A a P Hrefl.
         apply IndT_rect;simpl.
@@ -189,6 +208,8 @@ Module Complex.
         ind_computes : is_recursor spec ind_c ind_recursor }.
 
   End VarSec.
+  Arguments PositiveS index : clear implicits.
+  Arguments ConstrS index : clear implicits.
   Arguments recursor {index T spec} cstrs.
   Arguments is_recursor {index T spec cstrs} F.
   Arguments ind_c {index T spec} i.
@@ -386,3 +407,110 @@ Module Complex.
 
   End Examples.
 End Complex.
+
+Module Compile.
+  Import Simple Complex.
+  Section VarSec.
+
+    Context {index : Type}.
+
+    Fixpoint nonrec_of (spec : ConstrS index) :=
+      match spec with
+      | ConstrUniform A f =>
+        exists x : A, nonrec_of (f x)
+      | ConstrPositive _ spec => nonrec_of spec
+      | ConstrFinal _ => Unit
+      end.
+
+    Fixpoint iota_of spec : nonrec_of spec -> index :=
+      match spec return nonrec_of spec -> index with
+      | ConstrUniform A f =>
+        fun args =>
+          iota_of (f args.1) args.2
+      | ConstrPositive _ spec =>
+        iota_of spec
+      | ConstrFinal i =>
+        fun _ => i
+      end.
+
+    Fixpoint recdomain_of (spec : PositiveS index) : Type :=
+      match spec with
+      | PositiveFinal i => Unit
+      | PositiveFunc A f => exists x : A, recdomain_of (f x)
+      end.
+
+    Fixpoint reciota_of spec : recdomain_of spec -> index :=
+      match spec with
+      | PositiveFinal i =>
+        fun _ => i
+      | PositiveFunc A f =>
+        fun args => reciota_of (f args.1) args.2
+      end.
+
+    Fixpoint indrecdomain_of spec : nonrec_of spec -> Type :=
+      match spec return nonrec_of spec -> Type with
+      | ConstrUniform A f =>
+        fun args => indrecdomain_of (f args.1) args.2
+      | ConstrPositive pos spec =>
+        fun args =>
+          sum (recdomain_of pos) (indrecdomain_of spec args)
+      | ConstrFinal _ =>
+        fun _ =>
+          Empty
+      end.
+
+    Fixpoint indreciota_of spec : forall x, indrecdomain_of spec x -> index :=
+      match spec return forall x, indrecdomain_of spec x -> index with
+      | ConstrUniform A f =>
+        fun x args => indreciota_of (f x.1) x.2 args
+      | ConstrPositive pos spec =>
+        fun x args =>
+          match args with
+          | inl args => reciota_of pos args
+          | inr args => indreciota_of spec x args
+          end
+      | ConstrFinal _ =>
+        fun x args =>
+          match args with end
+      end.
+
+    Definition of_constrS (spec : ConstrS index) : InductiveS index :=
+      mkIndS' _ _ (indreciota_of spec) (iota_of spec).
+
+    Fixpoint complex_positiveT (T : index -> Type) (spec : PositiveS index)
+      : positiveT T spec -> forall x, T (reciota_of spec x)
+      := match spec return positiveT T spec -> forall x, T (reciota_of spec x) with
+         | PositiveFunc A f =>
+           fun p x => complex_positiveT T (f x.1) (p x.1) x.2
+         | PositiveFinal i =>
+           fun p _ => p
+         end.
+
+    Fixpoint complex_one_constrT (T:index -> Type) (spec : ConstrS index)
+      : IndConstrT T _ _ (indreciota_of spec) (iota_of spec) ->
+        constrT T spec
+      := match spec return IndConstrT T _ _ (indreciota_of spec) (iota_of spec) ->
+                           constrT T spec with
+         | ConstrUniform A f =>
+           fun c a =>
+             complex_one_constrT _ (f a) (fun x => c (a;x))
+         | ConstrPositive pos spec =>
+           fun c a =>
+             complex_one_constrT
+               T spec (fun x args =>
+                         c x (fun y =>
+                              match y with
+                              | inl y => complex_positiveT T pos a y
+                              | inr y => args y
+                              end))
+         | ConstrFinal i =>
+           fun c => c tt (fun e => match e with end)
+         end.
+
+    Definition complex_constrT (spec : ConstrS index) : constrT (IndT (of_constrS spec)) spec
+      := complex_one_constrT (IndT _) spec (IndC (of_constrS _)).
+
+
+  End VarSec.
+
+End Compile.
