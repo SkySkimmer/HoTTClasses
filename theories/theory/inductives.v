@@ -1,6 +1,7 @@
 Require HoTT.
 Import HoTT.Basics.
 Import HoTT.Types.Bool.
+Require Import HoTT.FunextAxiom.
 
 Global Set Automatic Introduction.
 Global Set Automatic Coercions Import.
@@ -9,10 +10,25 @@ Hint Resolve tt : core.
 (* Set Printing Universes. *)
 Open Scope list_scope.
 
-Context {funext : Funext}.
-
 Inductive Acc {A : Type} (R : A -> A -> Type) (x : A) : Type :=
   Acc_in : (forall y, R y x -> Acc R y) -> Acc R x.
+
+Definition sum_arrow_forall_ind {A B} {C:A+B -> Type} (P : (forall x, C x) -> Type)
+           (H : forall (f_1 : forall x, C (inl x)) (f_2 : forall y, C (inr y)),
+               P (fun x => match x with inl x => f_1 x | inr x => f_2 x end))
+  : forall f, P f.
+Proof.
+  intros.
+  pose (fl := fun x => f (inl x));pose (fr := fun x => f (inr x)).
+  assert (Ef : (fun x =>
+                  match x return C x with
+                  | inl x => fl x
+                  | inr x => fr x
+                  end) = f).
+  { apply path_forall;intros [x|x];reflexivity. }
+  apply (transport _ Ef).
+  auto.
+Defined.
 
 Module Simple.
 
@@ -481,15 +497,6 @@ Module Compile.
            fun p _ => p
          end.
 
-    Fixpoint simple_positiveT (T : index -> Type) (spec : PositiveS index)
-      : (forall x, T (reciota_of spec x)) -> positiveT T spec
-      := match spec return (forall x, T (reciota_of spec x)) -> positiveT T spec with
-         | PositiveFunc A f =>
-           fun p x => simple_positiveT T (f x) (fun y => p (x;y))
-         | PositiveFinal i =>
-           fun p => p tt
-         end.
-
     Fixpoint complex_one_constrT (T:index -> Type) (spec : ConstrS index)
       : IndConstrT T _ _ (indreciota_of spec) (iota_of spec) ->
         constrT T spec
@@ -514,6 +521,84 @@ Module Compile.
     Definition complex_constrT (spec : ConstrS index) : constrT (IndT (of_constrS spec)) spec
       := complex_one_constrT (IndT _) spec (IndC (of_constrS _)).
 
+    Fixpoint simple_positiveT (T : index -> Type) (spec : PositiveS index)
+      : (forall x, T (reciota_of spec x)) -> positiveT T spec
+      := match spec return (forall x, T (reciota_of spec x)) -> positiveT T spec with
+         | PositiveFunc A f =>
+           fun p x => simple_positiveT T (f x) (fun y => p (x;y))
+         | PositiveFinal i =>
+           fun p => p tt
+         end.
+
+    Fixpoint complex_simple_positiveT T spec : forall f x,
+        complex_positiveT T spec (simple_positiveT T spec f) x = f x.
+    Proof.
+      destruct spec as [i|A f];simpl.
+      - intros f [];reflexivity.
+      - intros g x.
+        apply complex_simple_positiveT.
+    Defined.
+
+    Section WithP.
+      Variables (T : index -> Type) (P : forall i, T i -> Type).
+
+      Fixpoint compile_ih spec : forall y, (forall z, P (reciota_of spec z) (y z)) ->
+                                      induction_hyp_of_pos T P spec (simple_positiveT T spec y).
+      Proof.
+        destruct spec as [i|A f];simpl;intros y ih.
+        - apply ih.
+        - intros a;apply compile_ih. intros z;apply (ih (a;z)).
+      Defined.
+
+      Fixpoint compile_rec_arg (spec : ConstrS index)
+        : forall (c : IndConstrT T _ _ (indreciota_of spec) (iota_of spec))
+            (rec : rec_arg T P spec (complex_one_constrT T spec c))
+            x y (ih : forall z, P (indreciota_of spec x z) (y z)),
+          P (iota_of spec x) (c x y).
+      Proof.
+        destruct spec as [A f|pos spec|i].
+        - intros c rec [a x] y ih.
+          simpl. apply (compile_rec_arg (f a) _ (rec a)).
+          exact ih.
+        - intros c rec x.
+          refine (sum_arrow_forall_ind _ _).
+          intros yl yr ih.
+          simpl.
+          pose proof (rec _ (compile_ih pos yl (fun z => ih (inl z)))) as rec';clear rec.
+          pose proof (compile_rec_arg _ _ rec' x yr (fun z => ih (inr z)))
+            as compiled;clear rec'.
+          simpl in compiled.
+          set (y0 := fun _ => _) in compiled.
+          set (y1 := fun _ => _).
+          refine (transport (fun y => P _ (c x y)) _ compiled).
+          apply path_forall;intros [z|z];[|reflexivity].
+          unfold y0, y1. exact (complex_simple_positiveT _ _ _ _).
+        - simpl. intros c rec x y ih.
+          clear ih. destruct x.
+          set (y' := fun e : Empty => _) in rec.
+          exact (transport (fun y0 => P i (c tt y0)) (path_ishprop y' y) rec).
+      Defined.
+
+    End WithP.
+
+    Definition compile_recursor (spec : ConstrS index)
+      : recursor (complex_constrT spec).
+    Proof.
+      intros P rec. apply IndT_rect.
+      simpl.
+      apply compile_rec_arg. exact rec.
+    Defined.
+
+  End VarSec.
+
+End Compile.
+
+Module Decompile.
+  Import Simple Complex Compile.
+  Section VarSec.
+    Context {index : Type}.
+
+
     Fixpoint simple_one_constrT (T : index -> Type) (spec : ConstrS index)
       : constrT T spec -> IndConstrT T _ _ (indreciota_of spec) (iota_of spec)
       := match spec return constrT T spec -> IndConstrT T _ _ (indreciota_of spec) (iota_of spec) with
@@ -526,8 +611,5 @@ Module Compile.
          | ConstrFinal i =>
            fun c _ _ => c
          end.
-
-
   End VarSec.
-
-End Compile.
+End Decompile.
