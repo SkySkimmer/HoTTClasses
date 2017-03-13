@@ -1,6 +1,6 @@
 Require HoTT.
 Import HoTT.Basics.
-Import HoTT.Types.Bool.
+Import HoTT.Types.Bool HoTT.Types.Sum.
 Require Import HoTT.FunextAxiom.
 
 Global Set Automatic Introduction.
@@ -14,21 +14,53 @@ Inductive Acc {A : Type} (R : A -> A -> Type) (x : A) : Type :=
   Acc_in : (forall y, R y x -> Acc R y) -> Acc R x.
 
 Definition sum_arrow_forall_ind {A B} {C:A+B -> Type} (P : (forall x, C x) -> Type)
-           (H : forall (f_1 : forall x, C (inl x)) (f_2 : forall y, C (inr y)),
-               P (fun x => match x with inl x => f_1 x | inr x => f_2 x end))
+           (H : forall fprod,
+               P (sum_ind_uncurried _ fprod))
   : forall f, P f.
 Proof.
-  intros.
-  pose (fl := fun x => f (inl x));pose (fr := fun x => f (inr x)).
-  assert (Ef : (fun x =>
-                  match x return C x with
-                  | inl x => fl x
-                  | inr x => fr x
-                  end) = f).
-  { apply path_forall;intros [x|x];reflexivity. }
-  apply (transport _ Ef).
-  auto.
+  apply (equiv_ind (sum_ind_uncurried _)). trivial.
 Defined.
+
+Lemma transport_path_forall_sig A (P:A->Type) (T:sig P->Type)
+      f g e
+      (Q:(forall x, T x) -> Type)
+      a
+      (Q0 := fun (f:forall x y, T (x;y)) => Q (fun x => f x.1 x.2))
+  : transport Q (path_forall f g e) a =
+    transport Q0 (path_forall _ _ (fun x => path_forall _ _ (fun y => e (x;y)))) a.
+Proof.
+  revert e. apply (equiv_ind apD10).
+  intros e;destruct e.
+  simpl.
+  set (f' := fun x y => f (x;y)).
+  path_via (transport Q0 (path_forall f' f' (fun x => idpath)) a).
+  { rewrite !Forall.path_forall_1. reflexivity. }
+  { apply (ap (fun e => transport Q0 (path_forall f' f' e) a)).
+    apply path_forall;intros x;rewrite Forall.path_forall_1. reflexivity. }
+Qed.
+
+Lemma transport_lam A B P (a b:B) (e:a=b) (f:forall x:A, P x a) x
+  : transport (fun y => forall x : A, P x y) e f x = transport (P x) e (f x).
+Proof.
+  destruct e;reflexivity.
+Qed.
+
+Lemma ap_path_forall_sig A (P:A->Type) C (T:A->Type) (k:(forall x, T x) -> forall x (y:P x), C x y) f g e x y
+  : apD10 (ap (fun f (x:sig P) => k f x.1 x.2) (path_forall f g e)) (x;y) =
+    ap (fun f => k f x y) (path_forall f g e).
+Proof.
+  revert e;apply (equiv_ind apD10). intros e;destruct e;simpl.
+  rewrite Forall.eta_path_forall. simpl. reflexivity.
+Qed.
+
+Lemma ap_path_forall A B C D (f:forall x, B x -> forall y:C x, D x y) x y h0 h1 e
+  : ap (fun (h:forall x:A,B x) => f x (h x) y) (path_forall h0 h1 e) =
+    apD10 (ap (fun h => f x h) (e x)) y.
+Proof.
+  revert e;apply (equiv_ind apD10). intros e;destruct e;simpl.
+  rewrite Forall.eta_path_forall. reflexivity.
+Qed.
+
 
 Module Simple.
 
@@ -475,11 +507,7 @@ Module Compile.
       | ConstrUniform A f =>
         fun x args => indreciota_of (f x.1) x.2 args
       | ConstrPositive pos spec =>
-        fun x args =>
-          match args with
-          | inl args => reciota_of pos args
-          | inr args => indreciota_of spec x args
-          end
+        fun x => sum_ind _ (reciota_of pos) (indreciota_of spec x)
       | ConstrFinal _ =>
         fun x args =>
           match args with end
@@ -509,11 +537,7 @@ Module Compile.
            fun c a =>
              complex_one_constrT
                T spec (fun x args =>
-                         c x (fun y =>
-                              match y with
-                              | inl y => complex_positiveT T pos a y
-                              | inr y => args y
-                              end))
+                         c x (sum_ind_uncurried _ (complex_positiveT T pos a, args)))
          | ConstrFinal i =>
            fun c => c tt (fun e => match e with end)
          end.
@@ -530,17 +554,27 @@ Module Compile.
            fun p => p tt
          end.
 
-    Fixpoint complex_simple_positiveT T spec : forall f x,
-        complex_positiveT T spec (simple_positiveT T spec f) x = f x.
+    Fixpoint complex_simple_positiveT T spec : forall p x,
+        complex_positiveT T spec (simple_positiveT T spec p) x = p x.
     Proof.
       destruct spec as [i|A f];simpl.
-      - intros f [];reflexivity.
-      - intros g x.
+      - intros p x. apply ap. destruct x;reflexivity.
+      - intros p x.
         apply complex_simple_positiveT.
+    Defined.
+
+    Fixpoint simple_complex_positiveT T spec : forall p,
+        simple_positiveT T spec (complex_positiveT T spec p) = p.
+    Proof.
+      destruct spec as [i|A f];simpl.
+      - intros p. reflexivity.
+      - intros p;apply path_forall;intros x.
+        apply simple_complex_positiveT.
     Defined.
 
     Section WithP.
       Variables (T : index -> Type) (P : forall i, T i -> Type).
+
 
       Fixpoint compile_ih spec : forall y, (forall z, P (reciota_of spec z) (y z)) ->
                                       induction_hyp_of_pos T P spec (simple_positiveT T spec y).
@@ -557,26 +591,124 @@ Module Compile.
           P (iota_of spec x) (c x y).
       Proof.
         destruct spec as [A f|pos spec|i].
-        - intros c rec [a x] y ih.
-          simpl. apply (compile_rec_arg (f a) _ (rec a)).
+        - intros c rec x y ih.
+          simpl. apply (compile_rec_arg (f x.1) _ (rec x.1)).
           exact ih.
         - intros c rec x.
           refine (sum_arrow_forall_ind _ _).
-          intros yl yr ih.
+          intros [yl yr] ih.
           simpl.
           pose proof (rec _ (compile_ih pos yl (fun z => ih (inl z)))) as rec';clear rec.
           pose proof (compile_rec_arg _ _ rec' x yr (fun z => ih (inr z)))
             as compiled;clear rec'.
           simpl in compiled.
-          set (y0 := fun _ => _) in compiled.
-          set (y1 := fun _ => _).
-          refine (transport (fun y => P _ (c x y)) _ compiled).
-          apply path_forall;intros [z|z];[|reflexivity].
-          unfold y0, y1. exact (complex_simple_positiveT _ _ _ _).
+          set (C := fun s => T _).
+          refine (transport (fun yl => P _ (c x (sum_ind_uncurried C (yl,yr)))) _ compiled).
+          apply path_forall;exact (complex_simple_positiveT _ _ _).
         - simpl. intros c rec x y ih.
           clear ih. destruct x.
           set (y' := fun e : Empty => _) in rec.
           exact (transport (fun y0 => P i (c tt y0)) (path_ishprop y' y) rec).
+      Defined.
+
+      Variable F : forall i x, P i x.
+      (*Tactics.path_forall_1_beta.*)
+
+      Fixpoint compile_ih_computes pos
+        : forall p,
+          transport (induction_hyp_of_pos T P pos) (simple_complex_positiveT T pos p)
+                    (compile_ih pos (complex_positiveT T pos p)
+                                (fun z => F _ (complex_positiveT T pos p z))) =
+          induction_hyp_from_rec T P F pos p.
+      Proof.
+        destruct pos as [i|A f];simpl;intros p.
+        - reflexivity.
+        - apply path_forall;intros a.
+          etransitivity;[|exact (compile_ih_computes (f a) (p a))].
+          set (fp := fun x => simple_positiveT T (f x) (complex_positiveT T (f x) (p x))).
+          set (fc := fun x => compile_ih (f x) (complex_positiveT T (f x) (p x))
+                                      (fun z => F _ _)).
+          etransitivity;[exact (transport_lam _ _ _ _ _ _ _ _)|].
+          apply Tactics.path_forall_1_beta.
+      Defined.
+
+      Definition compile_ih_computes_sig pos p :=
+        Sigma.path_sigma (induction_hyp_of_pos T P pos) (_;_) (_;_) _ (compile_ih_computes pos p).
+
+      Lemma compile_ih_computes_alt pos
+        : forall (Q : (forall a, T (reciota_of pos a)) -> Type)
+            (G : forall (p:sig (induction_hyp_of_pos T P pos)), Q (complex_positiveT _ _ p.1))
+            p,
+          transport _ (path_forall _ _ (complex_simple_positiveT T pos _))
+                    (G (_; (compile_ih pos _ (fun z => F _ (complex_positiveT T pos p z)))))
+          = (G (_; (induction_hyp_from_rec T P F pos p))).
+      Proof.
+        intros Q G p.
+        etransitivity;[|exact (apD G (compile_ih_computes_sig pos p))].
+        unfold compile_ih_computes_sig.
+        etransitivity;[|symmetry;refine (apD10 _ _);
+                        exact (Sigma.transport_pr1_path_sigma
+                                 _ _ (fun p => Q (complex_positiveT T pos p)))].
+        set (g := G _). clearbody g;clear G.
+        etransitivity;[|symmetry;apply transport_compose].
+        apply (ap (fun e => transport Q e g)).
+        clear Q g.
+        apply moveR_equiv_V.
+        induction pos as [i|A f IHf];simpl.
+        - apply path_forall;intros [];reflexivity.
+        - apply path_forall;intros [x y];simpl.
+          rewrite IHf.
+          set (cpos x := complex_positiveT T (f x)).
+          set (xy := (x;y)).
+          set (cpos_e x := simple_complex_positiveT T (f x) (p x)).
+          set (spos x := simple_positiveT T (f x)).
+          change (apD10 (ap (cpos x) (cpos_e x)) y =
+                  apD10 (ap (fun (p:forall a, positiveT T (f a)) x => cpos x.1 (p x.1) x.2)
+                            (path_forall (fun x => spos x (cpos x (p x))) _ cpos_e))
+                        xy).
+          set (k := fun _ _ => cpos _ _ _).
+          etransitivity;[|refine (inverse _);
+                          exact (ap_path_forall_sig
+                                   _ _ _ _ (fun p x y => k p (x;y)) _ _ cpos_e x y)].
+          unfold k;clear k;simpl.
+          symmetry. exact (ap_path_forall _ _ _ _ (fun x p y => cpos x p y) x y _ _ cpos_e).
+      Qed.
+
+      Fixpoint compile_computes_at spec
+        : forall c rec, (forall x y, F _ (c x y) = compile_rec_arg spec c rec x y (fun z => F _ (y z))) ->
+                   computes_at T P F spec (complex_one_constrT T spec c) rec.
+      Proof.
+        destruct spec as [A f|pos spec|i].
+        - intros c rec hf a.
+          apply compile_computes_at.
+          intros x y. apply (hf (a;x)).
+        - intros c rec hf p.
+          apply compile_computes_at.
+          intros x y.
+          etransitivity. apply hf.
+          etransitivity.
+          { simpl. unfold sum_arrow_forall_ind.
+            set (C := fun _ => T _).
+            set (CP := (fun _ => forall _, _)).
+            set (df := fun _ _ => _).
+            set (f' := (_,_)).
+            eapply ap10. exact (@equiv_ind_comp _ _ (@sum_ind_uncurried _ _ C) _ _ _ f'). }
+          simpl. set (TP := fun yl => P _ _).
+          apply (compile_ih_computes_alt
+                   pos TP
+                   (fun pih =>
+                      compile_rec_arg
+                        spec _
+                        (rec pih.1 pih.2) x y
+                        _)).
+        - intros c rec hf. simpl.
+          simpl in hf.
+          pose proof (hf tt (fun z => match z with end)) as hf';clear hf;simpl in hf'.
+          etransitivity;[exact hf'|clear hf'].
+          set (e := path_ishprop _ _).
+          set (TP := fun (_ : forall z, T _) => _). Check @transport.
+          refine (@transport _ (fun e => transport TP e rec = rec) idpath e _ idpath).
+          apply path_ishprop.
       Defined.
 
     End WithP.
@@ -588,6 +720,20 @@ Module Compile.
       simpl.
       apply compile_rec_arg. exact rec.
     Defined.
+
+    Lemma compile_is_recursor spec : is_recursor (compile_recursor spec).
+    Proof.
+      intros P rec. unfold compile_recursor.
+      set (F := IndT_rect _ _ _).
+      set (rec' := compile_rec_arg _ _ _ _ _) in F.
+      unfold complex_constrT.
+      set (c := IndC _).
+      pose (f := fun x y => F _ (c x y)).
+      simpl in f. apply compile_computes_at.
+      reflexivity.
+    Qed.
+
+    Definition compile_is_ind spec := Build_IsInductive (compile_is_recursor spec).
 
   End VarSec.
 
