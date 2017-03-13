@@ -738,24 +738,3 @@ Module Compile.
   End VarSec.
 
 End Compile.
-
-Module Decompile.
-  Import Simple Complex Compile.
-  Section VarSec.
-    Context {index : Type}.
-
-
-    Fixpoint simple_one_constrT (T : index -> Type) (spec : ConstrS index)
-      : constrT T spec -> IndConstrT T _ _ (indreciota_of spec) (iota_of spec)
-      := match spec return constrT T spec -> IndConstrT T _ _ (indreciota_of spec) (iota_of spec) with
-         | ConstrUniform A f =>
-           fun c x args => simple_one_constrT T (f _) (c _) x.2 args
-         | ConstrPositive pos spec =>
-           fun c x args =>
-             let posv := simple_positiveT T pos (fun y => args (inl y)) in
-             simple_one_constrT T spec (c posv) _ (fun y => args (inr y))
-         | ConstrFinal i =>
-           fun c _ _ => c
-         end.
-  End VarSec.
-End Decompile.
