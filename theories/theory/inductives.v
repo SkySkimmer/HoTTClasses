@@ -10,9 +10,52 @@ Hint Resolve tt : core.
 (* Set Printing Universes. *)
 Open Scope list_scope.
 
+(** Example showing S monomorphism. *)
+Definition nat_encode_step x y
+  := match x, y with
+     | O, O => Unit
+     | S x, S y => x = y
+     | _, _ => Empty
+     end.
+
+Lemma nat_encode_step_refl : forall x, nat_encode_step x x.
+Proof.
+  intros [|x];simpl;trivial.
+Defined.
+
+Definition nat_encode_step_to : forall x y, x = y -> nat_encode_step x y
+  := fun x y e => transport _ e (nat_encode_step_refl x).
+
+Lemma nat_encode_step_from : forall x y, nat_encode_step x y -> x = y.
+Proof.
+  intros x y;destruct x as [|x], y as [|y];simpl;intros e;
+    solve [destruct e|trivial|apply (ap S e)].
+Defined.
+
+Definition nat_encode_step_equiv_to : forall x y, IsEquiv (nat_encode_step_to x y).
+Proof.
+  intros x y;simple refine (BuildIsEquiv _ _ _ (nat_encode_step_from x y) _ _ _).
+  - intros e. destruct x as [|x], y as [|y];simpl in *;try solve [destruct e].
+    + apply Unit.eta_unit.
+    + destruct e;reflexivity.
+  - intros e;destruct e, x as [|x];simpl;reflexivity.
+  - intros e;destruct e, x as [|x];simpl;reflexivity.
+Defined.
+
+Definition nat_encode_step_equiv_from : forall x y, IsEquiv (nat_encode_step_from x y)
+  := fun x y => @isequiv_inverse _ _ _ (nat_encode_step_equiv_to x y).
+
+Lemma S_mono : forall x y, IsEquiv (@ap _ _ S x y).
+Proof.
+  intros x y.
+  exact (nat_encode_step_equiv_from (S x) (S y)).
+Defined.
+
+(** Acc isn't in HoTT's library *)
 Inductive Acc {A : Type} (R : A -> A -> Type) (x : A) : Type :=
   Acc_in : (forall y, R y x -> Acc R y) -> Acc R x.
 
+(** Lemmas *)
 Definition sum_arrow_forall_ind {A B} {C:A+B -> Type} (P : (forall x, C x) -> Type)
            (H : forall fprod,
                P (sum_ind_uncurried _ fprod))
