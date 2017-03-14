@@ -21,24 +21,6 @@ Proof.
   apply (equiv_ind (sum_ind_uncurried _)). trivial.
 Defined.
 
-Lemma transport_path_forall_sig A (P:A->Type) (T:sig P->Type)
-      f g e
-      (Q:(forall x, T x) -> Type)
-      a
-      (Q0 := fun (f:forall x y, T (x;y)) => Q (fun x => f x.1 x.2))
-  : transport Q (path_forall f g e) a =
-    transport Q0 (path_forall _ _ (fun x => path_forall _ _ (fun y => e (x;y)))) a.
-Proof.
-  revert e. apply (equiv_ind apD10).
-  intros e;destruct e.
-  simpl.
-  set (f' := fun x y => f (x;y)).
-  path_via (transport Q0 (path_forall f' f' (fun x => idpath)) a).
-  { rewrite !Forall.path_forall_1. reflexivity. }
-  { apply (ap (fun e => transport Q0 (path_forall f' f' e) a)).
-    apply path_forall;intros x;rewrite Forall.path_forall_1. reflexivity. }
-Qed.
-
 Lemma transport_lam A B P (a b:B) (e:a=b) (f:forall x:A, P x a) x
   : transport (fun y => forall x : A, P x y) e f x = transport (P x) e (f x).
 Proof.
