@@ -319,7 +319,7 @@ Module Complex.
 
   End IsMorphism.
 
-  Section Morphism.
+  Section DefaultMorphism.
     Context {index:Type} {A B : index -> Type}.
 
     Fixpoint ih_of_pos spec : forall r : positiveT A spec,
@@ -348,7 +348,27 @@ Module Complex.
       (cA : constrT A spec) (rec: recursor cA) (cB: constrT B spec) : forall i, A i -> B i
       := rec _ (rec_arg_of_constr spec cA cB).
 
-  End Morphism.
+    Lemma default_is_morphism spec cA rec cB
+      : is_recursor rec -> is_morphism (default_morphism spec cA rec cB) spec cA cB.
+    Proof.
+      intros isrec. do 2 red in isrec. unfold default_morphism.
+      pose proof (isrec _ (rec_arg_of_constr spec cA cB)) as isrec'.
+      clear isrec.
+      set (rec' := rec _ _) in *. clearbody rec';clear rec.
+      revert cA cB rec' isrec'.
+      induction spec as [T f IHf|pos spec IH|i];intros cA cB rec isrec;simpl.
+      - intros x. apply IHf,isrec.
+      - intros p. apply IH.
+        simpl in isrec.
+        refine (transport (fun p' => computes_at _ _ _ _ _ (rec_arg_of_constr _ _ (cB p'))) _ (isrec p)).
+        clear isrec IH spec cA cB.
+        revert p;induction pos as [i|T f IHf];intros p;simpl.
+        + reflexivity.
+        + apply path_forall;intros x. apply IHf.
+      - simpl in isrec. exact isrec.
+    Qed.
+
+  End DefaultMorphism.
 
   Section LoopMorphism.
     Context {funxext : Funext}.
@@ -374,8 +394,69 @@ Module Complex.
         rewrite X in E;trivial.
     Qed.
 
-
   End LoopMorphism.
+
+  Section ComposeMorphism.
+    Context {index : Type} {A B C : index -> Type}.
+    Variable F : forall i, A i -> B i.
+    Variable G : forall i, B i -> C i.
+
+    Fixpoint Fpos_compose pos
+      : forall p, Fpos (fun i => compose (G i) (F i)) pos p = Fpos G pos (Fpos F pos p).
+    Proof.
+      destruct pos as [i|T f];intros p;simpl.
+      - reflexivity.
+      - apply path_forall;intros x;apply Fpos_compose.
+    Qed.
+
+    Fixpoint compose_is_morphism spec
+      : forall cA cB cC, is_morphism F spec cA cB -> is_morphism G spec cB cC ->
+        is_morphism (fun i => compose (G i) (F i)) spec cA cC.
+    Proof.
+      destruct spec as [T f|pos spec|i];intros cA cB cC mF mG;simpl.
+      - intros x. apply (compose_is_morphism _ _ (cB x));trivial.
+      - intros pA. apply (compose_is_morphism _ _ (cB (Fpos F pos pA)));trivial.
+        refine (transport (fun p => is_morphism _ _ _ (cC p)) (Fpos_compose pos pA)^ _).
+        apply mG.
+      - path_via (G i cB).
+        apply ap. trivial.
+    Qed.
+  End ComposeMorphism.
+
+  Section EquivMorphism.
+    Context {index : Type} {A B : index -> Type}.
+    Variable F : forall i, A i -> B i.
+    Variable G : forall i, B i -> A i.
+
+    Lemma morphism_equiv spec cA cB (recA : recursor cA) (recB : recursor cB)
+      : is_morphism F spec cA cB -> is_morphism G spec cB cA ->
+        forall i, IsEquiv (F i).
+    Proof.
+      intros mF mG.
+      intros i;simple refine (isequiv_adjointify _ (G i) _ _).
+      - red;revert i. apply (loop_is_id _ _ _ recB).
+        exact (compose_is_morphism _ _ _ _ _ _ mG mF).
+      - red;revert i. apply (loop_is_id _ _ _ recA).
+        exact (compose_is_morphism _ _ _ _ _ _ mF mG).
+    Defined.
+
+  End EquivMorphism.
+
+  Section EquivInductive.
+
+    Context {index : Type} {A B : index -> Type} {spec : ConstrS index}.
+    Hypotheses (Aisind : IsInductive A spec) (Bisind : IsInductive B spec).
+
+    Definition inductive_default_isequiv
+      : forall i, IsEquiv (default_morphism _ _ (ind_recursor Aisind) (ind_c Bisind) i)
+      := morphism_equiv _ _ _ _ _ (ind_recursor Aisind) (ind_recursor Bisind)
+                        (default_is_morphism _ _ _ _ (ind_computes Aisind))
+                        (default_is_morphism _ _ _ _ (ind_computes Bisind)).
+
+    Definition inductive_default_equiv : forall i, A i <~> B i
+      := fun i => BuildEquiv _ _ _ (inductive_default_isequiv i).
+
+  End EquivInductive.
 
   Module Examples.
 
