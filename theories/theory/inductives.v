@@ -10,7 +10,8 @@ Hint Resolve tt : core.
 (* Set Printing Universes. *)
 Open Scope list_scope.
 
-(** Example showing S monomorphism. *)
+Class IsApEquiv {A B} (f:A -> B) := isapequiv :> forall x y, IsEquiv (@ap _ _ f x y).
+
 Definition nat_encode_step x y
   := match x, y with
      | O, O => Unit
@@ -35,7 +36,7 @@ Defined.
 Definition nat_encode_step_equiv_to : forall x y, IsEquiv (nat_encode_step_to x y).
 Proof.
   intros x y;simple refine (BuildIsEquiv _ _ _ (nat_encode_step_from x y) _ _ _).
-  - intros e. destruct x as [|x], y as [|y];simpl in *;try solve [destruct e].
+  - destruct x as [|x], y as [|y];try solve [exact (Empty_ind _)];intros e;simpl in *.
     + apply Unit.eta_unit.
     + destruct e;reflexivity.
   - intros e;destruct e, x as [|x];simpl;reflexivity.
@@ -45,11 +46,63 @@ Defined.
 Definition nat_encode_step_equiv_from : forall x y, IsEquiv (nat_encode_step_from x y)
   := fun x y => @isequiv_inverse _ _ _ (nat_encode_step_equiv_to x y).
 
-Lemma S_mono : forall x y, IsEquiv (@ap _ _ S x y).
+Instance S_apequiv : IsApEquiv S.
 Proof.
   intros x y.
   exact (nat_encode_step_equiv_from (S x) (S y)).
 Defined.
+
+Section BinTree.
+  (* Example inductive with multiple recursive arguments *)
+  Variable A : Type.
+  Inductive BinTree :=
+  | Leaf : A -> BinTree
+  | Node : BinTree -> BinTree -> BinTree.
+
+  Definition Node' xy := Node (fst xy) (snd xy).
+
+  Definition bintree_encode_step x y
+    := match x, y with
+       | Leaf x, Leaf y => x = y
+       | Node x1 x2, Node y1 y2 => (x1,x2) = (y1,y2)
+       | _, _ => Empty
+       end.
+
+  Definition bintree_encode_step_refl x : bintree_encode_step x x.
+  Proof. destruct x as [x|x1 x2];simpl;auto. Defined.
+
+  Definition bintree_encode_step_to x y : x = y -> bintree_encode_step x y
+    := fun e => transport _ e (bintree_encode_step_refl x).
+
+  Definition bintree_encode_step_from x y : bintree_encode_step x y -> x = y.
+  Proof.
+    destruct x as [x|x1 x2], y as [y|y1 y2];simpl;try exact (Empty_rec _).
+    - apply ap.
+    - intros p. change (Node' (x1,x2) = Node' (y1,y2)). apply ap. trivial.
+  Defined.
+
+  Definition bintree_encode_step_equiv_to : forall x y, IsEquiv (bintree_encode_step_to x y).
+  Proof.
+    intros x y;simple refine (BuildIsEquiv _ _ _ (bintree_encode_step_from x y) _ _ _).
+    - destruct x as [x|x1 x2], y as [y|y1 y2];try solve [exact (Empty_ind _)];simpl in *.
+      + intros e;destruct e;reflexivity.
+      + red. apply (equiv_ind (Prod.equiv_path_prod _ _));simpl.
+        intros [[] []];reflexivity.
+    - intros e;destruct e, x as [x|x1 x2];simpl;reflexivity.
+    - intros e;destruct e, x as [x|x1 x2];simpl;reflexivity.
+  Defined.
+
+  Definition bintree_encode_step_equiv_from : forall x y, IsEquiv (bintree_encode_step_from x y)
+    := fun x y => @isequiv_inverse _ _ _ (bintree_encode_step_equiv_to x y).
+
+  Instance Node_apequiv : IsApEquiv Node'.
+  Proof.
+    intros xy xy'.
+    pose proof (bintree_encode_step_equiv_from (Node' xy) (Node' xy')) as e.
+    simpl in e. destruct xy as [x y], xy' as [x' y']. exact e.
+  Defined.
+
+End BinTree.
 
 (** Acc isn't in HoTT's library *)
 Inductive Acc {A : Type} (R : A -> A -> Type) (x : A) : Type :=
