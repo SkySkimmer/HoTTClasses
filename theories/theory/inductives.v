@@ -12,6 +12,92 @@ Open Scope list_scope.
 
 Class IsApEquiv {A B} (f:A -> B) := isapequiv :> forall x y, IsEquiv (@ap _ _ f x y).
 
+Lemma embedding_apequiv {A B} (f : A -> B) : IsEmbedding f -> IsApEquiv f.
+Proof.
+  intros E x y.
+  simple refine (isequiv_adjointify _ _ _ _).
+  - intros e. red in E.
+    pose proof (path_ishprop ((x;e): hfiber f (f y)) ((y;idpath): hfiber f (f y))) as e'.
+    exact (ap pr1 e').
+  - intros e.
+    simpl. set (e' := path_ishprop _ _).
+    pose (e1 := (Sigma.equiv_path_sigma _ _ _)^-1 e').
+    simpl in e1. change (ap f e1.1 = e). clearbody e1. destruct e1 as [e1 e2].
+    destruct e1. simpl in *. exact e2^.
+  - intros e;destruct e;simpl.
+    set (e' := path_ishprop _ _).
+    exact (transport (fun e' => ap pr1 e' = idpath) (path_ishprop idpath e') idpath).
+Defined.
+
+Lemma apequiv_embedding {A B} (f : A -> B) : IsApEquiv f -> IsEmbedding f.
+Proof.
+  intros E y. apply hprop_allpath.
+  intros [x px] [x' px']. destruct px'.
+  revert px. apply (equiv_ind (ap f)).
+  intros e. destruct e. reflexivity.
+Defined.
+
+Lemma truncmap_isequiv {A B} (f : A -> B) : IsTruncMap (-2) f -> IsEquiv f.
+Proof.
+  intros E;simple refine (BuildIsEquiv _ _ _ _ _ _ _).
+  - intros y. exact (@center _ (E y)).1.
+  - intros y. exact (@center _ (E y)).2.
+  - intros x. exact (ap pr1 (contr ((x;idpath): hfiber f (f x)))).
+  - intros x. simpl.
+    set (p := contr _).
+    set (c := center _) in *.
+    clearbody p c. revert p;apply (equiv_ind inverse). intros p;destruct p.
+    simpl. reflexivity.
+Qed.
+
+Lemma isequiv_truncmap {A B} (f:A -> B) : IsEquiv f -> IsTruncMap (-2) f.
+Proof.
+  intros E y.
+  refine {| center := (f^-1 y;eisretr _ _); contr := _ |}.
+  intros [x p]. destruct p.
+  refine (Sigma.path_sigma' _ (eissect _ _) _).
+  refine (transport (fun p => transport _ _ p = idpath) (eisadj f x)^ _).
+  generalize (eissect f x). intros p;destruct p;simpl. reflexivity.
+Qed.
+
+Definition truncmap_S_ap_truncmap {A B} n (f:A -> B)
+  : IsTruncMap (trunc_S n) f ->
+    forall x y, IsTruncMap n (@ap _ _ f x y)
+  := fun E x x' y =>
+       @trunc_equiv _ _ _ _ _ (isequiv_inverse (Fibrations.hfiber_ap y)).
+
+Lemma ap_truncmap_truncmap_S {A B} n (f:A -> B)
+  : (forall x y, IsTruncMap n (@ap _ _ f x y)) ->
+    IsTruncMap (trunc_S n) f.
+Proof.
+  intros E y.
+  intros a b. change (IsTrunc n (a = b)).
+  destruct a as [a p], b as [b q].
+  destruct q.
+  exact (@trunc_equiv _ _ _ _ _ (equiv_isequiv (Fibrations.hfiber_ap p))).
+Qed.
+
+Lemma embedding_apequiv_alt {A B} (f : A -> B) : IsEmbedding f -> IsApEquiv f.
+Proof.
+  intros E x y. apply truncmap_isequiv,truncmap_S_ap_truncmap,E.
+Qed.
+
+Lemma apequiv_embedding_alt {A B} (f : A -> B) : IsApEquiv f -> IsEmbedding f.
+Proof.
+  intros E. apply ap_truncmap_truncmap_S. intros x y;apply isequiv_truncmap,E.
+Qed.
+
+Instance apequiv_compose {A B C} (f:A->B) (g:B->C) `{!IsApEquiv f} `{!IsApEquiv g}
+  : IsApEquiv (compose g f).
+Proof.
+  intros x y.
+  apply (isequiv_homotopic (compose (@ap _ _ g (f x) (f y)) (@ap _ _ f x y))).
+  intros p. Symmetry;apply ap_compose.
+Defined.
+
+Instance equiv_apequiv {A B} (f : A -> B) `{!IsEquiv f} : IsApEquiv f := isequiv_ap.
+
+(** Example showing IsApEquiv S. *)
 Definition nat_encode_step x y
   := match x, y with
      | O, O => Unit
