@@ -37,54 +37,37 @@ Proof.
   intros e. destruct e. reflexivity.
 Defined.
 
-Lemma truncmap_isequiv {A B} (f : A -> B) : IsTruncMap (-2) f -> IsEquiv f.
-Proof.
-  intros E;simple refine (BuildIsEquiv _ _ _ _ _ _ _).
-  - intros y. exact (@center _ (E y)).1.
-  - intros y. exact (@center _ (E y)).2.
-  - intros x. exact (ap pr1 (contr ((x;idpath): hfiber f (f x)))).
-  - intros x. simpl.
-    set (p := contr _).
-    set (c := center _) in *.
-    clearbody p c. revert p;apply (equiv_ind inverse). intros p;destruct p.
-    simpl. reflexivity.
-Qed.
+Definition truncmap_isequiv {A B} (f : A -> B) : IsTruncMap (-2) f -> IsEquiv f
+  := EquivalenceVarieties.isequiv_fcontr _.
 
-Lemma isequiv_truncmap {A B} (f:A -> B) : IsEquiv f -> IsTruncMap (-2) f.
-Proof.
-  intros E y.
-  refine {| center := (f^-1 y;eisretr _ _); contr := _ |}.
-  intros [x p]. destruct p.
-  refine (Sigma.path_sigma' _ (eissect _ _) _).
-  refine (transport (fun p => transport _ _ p = idpath) (eisadj f x)^ _).
-  generalize (eissect f x). intros p;destruct p;simpl. reflexivity.
-Qed.
+Definition isequiv_truncmap {A B} (f:A -> B) : IsEquiv f -> IsTruncMap (-2) f
+  := EquivalenceVarieties.fcontr_isequiv _.
 
 Definition truncmap_S_ap_truncmap {A B} n (f:A -> B)
   : IsTruncMap (trunc_S n) f ->
     forall x y, IsTruncMap n (@ap _ _ f x y)
   := fun E x x' y =>
-       @trunc_equiv _ _ _ _ _ (isequiv_inverse (Fibrations.hfiber_ap y)).
+       trunc_equiv' _ (Fibrations.hfiber_ap y)^-1.
 
 Lemma ap_truncmap_truncmap_S {A B} n (f:A -> B)
   : (forall x y, IsTruncMap n (@ap _ _ f x y)) ->
     IsTruncMap (trunc_S n) f.
 Proof.
-  intros E y.
-  intros a b. change (IsTrunc n (a = b)).
+  intros E y a b;
+    change (IsTrunc n (a = b)).
   destruct a as [a p], b as [b q].
   destruct q.
-  exact (@trunc_equiv _ _ _ _ _ (equiv_isequiv (Fibrations.hfiber_ap p))).
-Qed.
+  exact (trunc_equiv' _ (Fibrations.hfiber_ap p)).
+Defined. About isequiv_ap.
 
 Lemma embedding_apequiv_alt {A B} (f : A -> B) : IsEmbedding f -> IsApEquiv f.
 Proof.
-  intros E x y. apply truncmap_isequiv,truncmap_S_ap_truncmap,E.
+  intros E x y. apply EquivalenceVarieties.isequiv_fcontr,truncmap_S_ap_truncmap,E.
 Qed.
 
 Lemma apequiv_embedding_alt {A B} (f : A -> B) : IsApEquiv f -> IsEmbedding f.
 Proof.
-  intros E. apply ap_truncmap_truncmap_S. intros x y;apply isequiv_truncmap,E.
+  intros E. apply ap_truncmap_truncmap_S. intros x y;red;apply EquivalenceVarieties.fcontr_isequiv,E.
 Qed.
 
 Instance apequiv_compose {A B C} (f:A->B) (g:B->C) `{!IsApEquiv f} `{!IsApEquiv g}
