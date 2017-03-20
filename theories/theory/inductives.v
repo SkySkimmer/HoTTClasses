@@ -249,6 +249,51 @@ Module Simple.
     Inductive IndT : index -> Type :=
       IndC : IndConstrT IndT (nonrec S) (indrecdomain S) (indreciota S) (iota S).
 
+    Definition IndConstrT' (A : index -> Type) nonrec recdomain reciota iota
+      := forall x : nonrec,
+        (forall y : recdomain x, A (reciota x y)) ->
+        forall i, iota x = i ->
+             A i.
+
+    Inductive IndT' : index -> Type :=
+      IndC' : IndConstrT' IndT' (nonrec S) (indrecdomain S) (indreciota S) (iota S).
+
+    Fixpoint IndT_to_IndT' i (x : IndT i) : IndT' i.
+    Proof.
+      destruct x as [x rec].
+      apply (IndC' x).
+      - intros y;exact (IndT_to_IndT' _ (rec y)).
+      - reflexivity.
+    Defined.
+
+    Fixpoint IndT'_to_IndT i (x : IndT' i) : IndT i.
+    Proof.
+      destruct x as [x rec i' []].
+      constructor.
+      intros y;exact (IndT'_to_IndT _ (rec y)).
+    Defined.
+
+    Lemma sect_IndT_to_IndT' : forall i, Sect (IndT_to_IndT' i) (IndT'_to_IndT i).
+    Proof.
+      red. intros i x;induction x as [x rec IH].
+      simpl. apply ap,path_forall;intros y.
+      apply IH.
+    Qed.
+
+    Lemma sect_IndT'_to_IndT : forall i, Sect (IndT'_to_IndT i) (IndT_to_IndT' i).
+    Proof.
+      intros i x;induction x as [x rec IH i' []].
+      simpl. apply (ap (fun rec => IndC' x rec (iota S x) idpath)),path_forall;intros y.
+      apply IH.
+    Qed.
+
+    Lemma isequiv_IndT_to_IndT' : forall i, IsEquiv (IndT_to_IndT' i).
+    Proof.
+      intros i;exact (isequiv_adjointify _ (IndT'_to_IndT i)
+                                          (sect_IndT'_to_IndT i)
+                                          (sect_IndT_to_IndT' i)).
+    Qed.
+
     Definition criterion := forall x y, IsEquiv (@ap _ _ (iota S) x y).
 
     Theorem criterion_hprop (Hc : criterion) : forall i, IsHProp (IndT i).
