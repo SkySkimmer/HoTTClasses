@@ -2,6 +2,7 @@ Require HoTT.
 Import HoTT.Basics.
 Import HoTT.Types.Bool HoTT.Types.Sum.
 Require Import HoTT.FunextAxiom.
+Require Import HoTTClasses.theory.inductives.ast.
 
 Global Set Automatic Introduction.
 Global Set Automatic Coercions Import.
@@ -9,169 +10,6 @@ Hint Resolve tt : core.
 
 (* Set Printing Universes. *)
 Open Scope list_scope.
-
-Class IsApEquiv {A B} (f:A -> B) := isapequiv :> forall x y, IsEquiv (@ap _ _ f x y).
-
-Lemma embedding_apequiv {A B} (f : A -> B) : IsEmbedding f -> IsApEquiv f.
-Proof.
-  intros E x y.
-  simple refine (isequiv_adjointify _ _ _ _).
-  - intros e. red in E.
-    pose proof (path_ishprop ((x;e): hfiber f (f y)) ((y;idpath): hfiber f (f y))) as e'.
-    exact (ap pr1 e').
-  - intros e.
-    simpl. set (e' := path_ishprop _ _).
-    pose (e1 := (Sigma.equiv_path_sigma _ _ _)^-1 e').
-    simpl in e1. change (ap f e1.1 = e). clearbody e1. destruct e1 as [e1 e2].
-    destruct e1. simpl in *. exact e2^.
-  - intros e;destruct e;simpl.
-    set (e' := path_ishprop _ _).
-    exact (transport (fun e' => ap pr1 e' = idpath) (path_ishprop idpath e') idpath).
-Defined.
-
-Lemma apequiv_embedding {A B} (f : A -> B) : IsApEquiv f -> IsEmbedding f.
-Proof.
-  intros E y. apply hprop_allpath.
-  intros [x px] [x' px']. destruct px'.
-  revert px. apply (equiv_ind (ap f)).
-  intros e. destruct e. reflexivity.
-Defined.
-
-Definition truncmap_isequiv {A B} (f : A -> B) : IsTruncMap (-2) f -> IsEquiv f
-  := EquivalenceVarieties.isequiv_fcontr _.
-
-Definition isequiv_truncmap {A B} (f:A -> B) : IsEquiv f -> IsTruncMap (-2) f
-  := EquivalenceVarieties.fcontr_isequiv _.
-
-Definition truncmap_S_ap_truncmap {A B} n (f:A -> B)
-  : IsTruncMap (trunc_S n) f ->
-    forall x y, IsTruncMap n (@ap _ _ f x y)
-  := fun E x x' y =>
-       trunc_equiv' _ (Fibrations.hfiber_ap y)^-1.
-
-Lemma ap_truncmap_truncmap_S {A B} n (f:A -> B)
-  : (forall x y, IsTruncMap n (@ap _ _ f x y)) ->
-    IsTruncMap (trunc_S n) f.
-Proof.
-  intros E y a b;
-    change (IsTrunc n (a = b)).
-  destruct a as [a p], b as [b q].
-  destruct q.
-  exact (trunc_equiv' _ (Fibrations.hfiber_ap p)).
-Defined. About isequiv_ap.
-
-Lemma embedding_apequiv_alt {A B} (f : A -> B) : IsEmbedding f -> IsApEquiv f.
-Proof.
-  intros E x y. apply EquivalenceVarieties.isequiv_fcontr,truncmap_S_ap_truncmap,E.
-Qed.
-
-Lemma apequiv_embedding_alt {A B} (f : A -> B) : IsApEquiv f -> IsEmbedding f.
-Proof.
-  intros E. apply ap_truncmap_truncmap_S. intros x y;red;apply EquivalenceVarieties.fcontr_isequiv,E.
-Qed.
-
-Instance apequiv_compose {A B C} (f:A->B) (g:B->C) `{!IsApEquiv f} `{!IsApEquiv g}
-  : IsApEquiv (compose g f).
-Proof.
-  intros x y.
-  apply (isequiv_homotopic (compose (@ap _ _ g (f x) (f y)) (@ap _ _ f x y))).
-  intros p. Symmetry;apply ap_compose.
-Defined.
-
-Instance equiv_apequiv {A B} (f : A -> B) `{!IsEquiv f} : IsApEquiv f := isequiv_ap.
-
-(** Example showing IsApEquiv S. *)
-Definition nat_encode_step x y
-  := match x, y with
-     | O, O => Unit
-     | S x, S y => x = y
-     | _, _ => Empty
-     end.
-
-Lemma nat_encode_step_refl : forall x, nat_encode_step x x.
-Proof.
-  intros [|x];simpl;trivial.
-Defined.
-
-Definition nat_encode_step_to : forall x y, x = y -> nat_encode_step x y
-  := fun x y e => transport _ e (nat_encode_step_refl x).
-
-Lemma nat_encode_step_from : forall x y, nat_encode_step x y -> x = y.
-Proof.
-  intros x y;destruct x as [|x], y as [|y];simpl;intros e;
-    solve [destruct e|trivial|apply (ap S e)].
-Defined.
-
-Definition nat_encode_step_equiv_to : forall x y, IsEquiv (nat_encode_step_to x y).
-Proof.
-  intros x y;simple refine (BuildIsEquiv _ _ _ (nat_encode_step_from x y) _ _ _).
-  - destruct x as [|x], y as [|y];try solve [exact (Empty_ind _)];intros e;simpl in *.
-    + apply Unit.eta_unit.
-    + destruct e;reflexivity.
-  - intros e;destruct e, x as [|x];simpl;reflexivity.
-  - intros e;destruct e, x as [|x];simpl;reflexivity.
-Defined.
-
-Definition nat_encode_step_equiv_from : forall x y, IsEquiv (nat_encode_step_from x y)
-  := fun x y => @isequiv_inverse _ _ _ (nat_encode_step_equiv_to x y).
-
-Instance S_apequiv : IsApEquiv S.
-Proof.
-  intros x y.
-  exact (nat_encode_step_equiv_from (S x) (S y)).
-Defined.
-
-Section BinTree.
-  (* Example inductive with multiple recursive arguments *)
-  Variable A : Type.
-  Inductive BinTree :=
-  | Leaf : A -> BinTree
-  | Node : BinTree -> BinTree -> BinTree.
-
-  Definition Node' xy := Node (fst xy) (snd xy).
-
-  Definition bintree_encode_step x y
-    := match x, y with
-       | Leaf x, Leaf y => x = y
-       | Node x1 x2, Node y1 y2 => (x1,x2) = (y1,y2)
-       | _, _ => Empty
-       end.
-
-  Definition bintree_encode_step_refl x : bintree_encode_step x x.
-  Proof. destruct x as [x|x1 x2];simpl;auto. Defined.
-
-  Definition bintree_encode_step_to x y : x = y -> bintree_encode_step x y
-    := fun e => transport _ e (bintree_encode_step_refl x).
-
-  Definition bintree_encode_step_from x y : bintree_encode_step x y -> x = y.
-  Proof.
-    destruct x as [x|x1 x2], y as [y|y1 y2];simpl;try exact (Empty_rec _).
-    - apply ap.
-    - intros p. change (Node' (x1,x2) = Node' (y1,y2)). apply ap. trivial.
-  Defined.
-
-  Definition bintree_encode_step_equiv_to : forall x y, IsEquiv (bintree_encode_step_to x y).
-  Proof.
-    intros x y;simple refine (BuildIsEquiv _ _ _ (bintree_encode_step_from x y) _ _ _).
-    - destruct x as [x|x1 x2], y as [y|y1 y2];try solve [exact (Empty_ind _)];simpl in *.
-      + intros e;destruct e;reflexivity.
-      + red. apply (equiv_ind (Prod.equiv_path_prod _ _));simpl.
-        intros [[] []];reflexivity.
-    - intros e;destruct e, x as [x|x1 x2];simpl;reflexivity.
-    - intros e;destruct e, x as [x|x1 x2];simpl;reflexivity.
-  Defined.
-
-  Definition bintree_encode_step_equiv_from : forall x y, IsEquiv (bintree_encode_step_from x y)
-    := fun x y => @isequiv_inverse _ _ _ (bintree_encode_step_equiv_to x y).
-
-  Instance Node_apequiv : IsApEquiv Node'.
-  Proof.
-    intros xy xy'.
-    pose proof (bintree_encode_step_equiv_from (Node' xy) (Node' xy')) as e.
-    simpl in e. destruct xy as [x y], xy' as [x' y']. exact e.
-  Defined.
-
-End BinTree.
 
 (** Acc isn't in HoTT's library *)
 Inductive Acc {A : Type} (R : A -> A -> Type) (x : A) : Type :=
@@ -586,7 +424,6 @@ Module Complex.
         refine (transport (fun p => is_morphism _ _ _ (cC p)) (Fpos_compose pos pA)^ _).
         apply mG.
       - path_via (G i cB).
-        apply ap. trivial.
     Qed.
   End ComposeMorphism.
 
@@ -979,7 +816,7 @@ Module Compile.
           pose proof (hf tt (fun z => match z with end)) as hf';clear hf;simpl in hf'.
           etransitivity;[exact hf'|clear hf'].
           set (e := path_ishprop _ _).
-          set (TP := fun (_ : forall z, T _) => _). Check @transport.
+          set (TP := fun (_ : forall z, T _) => _).
           refine (@transport _ (fun e => transport TP e rec = rec) idpath e _ idpath).
           apply path_ishprop.
       Defined.
@@ -1008,6 +845,114 @@ Module Compile.
 
     Definition compile_is_ind spec := Build_IsInductive (compile_is_recursor spec).
 
+    Definition compile_equiv T spec (Tind : IsInductive T spec)
+      : forall i, IndT (of_constrS spec) i <~> T i
+      := inductive_default_equiv (compile_is_ind spec) Tind.
+
   End VarSec.
 
 End Compile.
+
+Module Abstract.
+  Section VarSec.
+
+    Context {index : Type}.
+
+    (* A constructor. *)
+    Inductive ConstrS {A} (Γ : ctxS A) : Type :=
+    | ConstrUniform : forall B, @ConstrS (sig B) (consS A Γ B) -> ConstrS Γ
+    | ConstrPositive : (A -> Complex.PositiveS index) -> ConstrS Γ -> @ConstrS A Γ
+    | ConstrFinal : exprS Γ (fun _ => index) -> @ConstrS A Γ
+    .
+
+    Fixpoint complex_of {A Γ} (spec : @ConstrS A Γ) : A -> Complex.ConstrS index
+      := match spec with
+         | ConstrUniform B f =>
+           fun a => Complex.ConstrUniform (B a) (fun b => complex_of f (a;b))
+         | ConstrPositive pos spec =>
+           fun a => Complex.ConstrPositive (pos a) (complex_of spec a)
+         | ConstrFinal i =>
+           fun a => Complex.ConstrFinal (eval_expr i a)
+         end.
+
+    Section WithT.
+      Variable T : index -> Type.
+
+      Fixpoint constrT {A Γ} (spec : @ConstrS A Γ) : A -> Type
+        := match spec with
+           | ConstrUniform B f =>
+             fun a => forall x : B a, constrT f (a;x)
+           | ConstrPositive pos spec =>
+             fun a => (Complex.positiveT T (pos a)) -> constrT spec a
+           | ConstrFinal i =>
+             fun a => T (eval_expr i a)
+           end.
+
+      Lemma constrT_ok : forall A Γ (spec : @ConstrS A Γ) (a : A),
+          constrT spec a = Complex.constrT T (complex_of spec a).
+      Proof.
+        intros A Γ spec a;induction spec as [A Γ B f IHf | A Γ pos spec IH | A Γ i];simpl.
+        - apply (ap (fun g => forall x, g x)),path_forall;intros b.
+          apply IHf.
+        - apply (ap (fun g => _ -> g) (IH a)).
+        - reflexivity.
+      Qed.
+
+      (** We could define and show equivalence for the definitions of recursors etc but why bother. *)
+    End WithT.
+
+    Fixpoint extract_iota {A Γ} (spec : @ConstrS A Γ) : exists A' Δ, @exprS A' Δ (fun _ => index)
+      := match spec with
+         | ConstrUniform B f => extract_iota f
+         | ConstrPositive _ spec => extract_iota spec
+         | ConstrFinal i => (_;(_;i))
+         end.
+
+    Theorem criterion_uses_embedding : forall (spec : ConstrS nilS),
+        uses_embeddings (extract_iota spec).2.2 ->
+        Simple.criterion (Compile.of_constrS (complex_of spec tt)).
+    Proof.
+    Admitted.
+
+  End VarSec.
+  Arguments ConstrS index {A} Γ : clear implicits.
+
+  Module Examples.
+
+    Module Nat.
+
+      Definition nat0 : ConstrS Unit nilS
+        := ConstrFinal _ (constE _ Unit tt).
+
+      Definition natS : ConstrS Unit nilS
+        := ConstrUniform _ (fun _ => Unit) (ConstrFinal _ (constE _ Unit tt)).
+
+      (* TODO multiple constructors *)
+    End Nat.
+
+    Module Paths.
+      Section VarSec.
+        Variables (A:Type) (a:A).
+
+        Definition pathS : ConstrS A nilS
+          := ConstrFinal _ (constE _ A a).
+
+        Check (idpath : complex_of pathS tt = Complex.Examples.Path.pathS A a).
+
+        Lemma ishprop_paths_hset {Aset : IsHSet A} : forall b, IsHProp (paths a b).
+        Proof.
+          intros b. srefine (@trunc_equiv'
+                               _ _
+                               (Compile.compile_equiv
+                                  _ _
+                                  (Complex.Examples.Path.path_is_ind A a) b) _ _).
+          apply Simple.criterion_hprop;clear b.
+          apply (criterion_uses_embedding pathS).
+          simpl. exact (Aset a). (* ← lol *)
+        Qed.
+      End VarSec.
+    End Paths.
+
+  End Examples.
+
+End Abstract.
