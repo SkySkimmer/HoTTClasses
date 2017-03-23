@@ -8,7 +8,6 @@ Global Set Automatic Introduction.
 Global Set Automatic Coercions Import.
 Hint Resolve tt : core.
 
-(* Set Printing Universes. *)
 Open Scope list_scope.
 
 (** Acc isn't in HoTT's library *)
