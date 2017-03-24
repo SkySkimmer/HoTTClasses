@@ -907,11 +907,37 @@ Module Abstract.
          | ConstrFinal i => (_;(_;i))
          end.
 
+    Fixpoint extract_iota_nonrec {A Γ} (spec : @ConstrS A Γ)
+      : (exists a, Compile.nonrec_of (complex_of spec a)) <~> (extract_iota spec).1.
+    Proof.
+      destruct spec as [B f|pos spec|i];simpl.
+      - exact ((extract_iota_nonrec _ _ f)
+                 oE (Sigma.equiv_sigma_assoc B (fun p => Compile.nonrec_of (complex_of f p)))).
+      - apply extract_iota_nonrec.
+      - apply Sigma.equiv_sigma_contr,_.
+    Defined.
+
+    Fixpoint extract_iota_eval {A Γ} (spec : @ConstrS A Γ)
+      : eval_expr (extract_iota spec).2.2 =
+        fun x => Compile.iota_of (complex_of spec ((extract_iota_nonrec spec)^-1 x).1)
+                              ((extract_iota_nonrec spec)^-1 x).2.
+    Proof.
+      destruct spec as [B f|pos spec|i];simpl.
+      - apply extract_iota_eval.
+      - apply extract_iota_eval.
+      - reflexivity.
+    Qed.
+
     Theorem criterion_uses_embedding : forall (spec : ConstrS nilS),
         uses_embeddings (extract_iota spec).2.2 ->
         Simple.criterion (Compile.of_constrS (complex_of spec tt)).
     Proof.
+      red. simpl. intros spec H x y.
+      cut (IsEmbedding (eval_expr (extract_iota spec).2.2)).
+      - intros ise. rewrite (extract_iota_eval spec) in ise.
+        apply jections.embedding_apequiv.
     Admitted.
+
 
   End VarSec.
   Arguments ConstrS index {A} Γ : clear implicits.
