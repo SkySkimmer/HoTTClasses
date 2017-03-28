@@ -5,52 +5,65 @@ Global Set Automatic Introduction.
 Global Set Automatic Coercions Import.
 Hint Resolve tt : core.
 
-Inductive ctxS : Type -> Type :=
-| nilS : ctxS Unit
-| consS : forall A (Γ : ctxS A) B, ctxS (@sig A B).
+Open Scope list_scope.
 
-Inductive varS : forall {A} (Γ : ctxS A), (A -> Type) -> Type :=
-| here : forall A Γ B, varS (consS A Γ B) (fun γ => B γ.1)
-| next : forall A Γ B, varS Γ B -> forall C, varS (consS A Γ C) (fun γ => B γ.1).
+Notation " [ ] " := nil (format "[ ]") : list_scope.
+Notation " [ x ] " := (cons x nil) : list_scope.
+Notation " [ x ; y ; .. ; z ] " :=  (cons x (cons y .. (cons z nil) ..))
+  : list_scope.
 
-Fixpoint nat_varS {A Γ B} (x : @varS A Γ B) : nat :=
-  match x with
-  | here _ _ _ => 0
-  | next A Γ B x _ => S (nat_varS x)
+Definition ctxS := list Type.
+Fixpoint eval_ctx (c : ctxS) : Type :=
+  match c with
+  | nil => Unit
+  | A :: c => A * eval_ctx c
   end.
 
-Fixpoint eval_var {A Γ B} (x : @varS A Γ B) : forall a, B a
+Inductive varS (A : Type) : ctxS -> Type :=
+| here : forall Γ, varS A (A :: Γ)
+| next : forall Γ, varS A Γ -> forall B, varS A (B :: Γ).
+
+Fixpoint nat_varS {A Γ} (x : @varS A Γ) : nat :=
+  match x with
+  | here _ => 0
+  | next Γ x B => S (nat_varS x)
+  end.
+
+Fixpoint eval_var {A Γ} (x : varS A Γ) : eval_ctx Γ -> A
   := match x with
-     | here A Γ B => pr2
-     | next A Γ B x C =>
-       fun a => eval_var x a.1
+     | here Γ => fst
+     | next Γ x B =>
+       (eval_var x) o snd
      end.
 
-Inductive exprS {T} (Γ : ctxS T) : forall A : (T -> Type), (forall e, A e) -> Type :=
-| constE : forall A (x : A), exprS Γ (fun _ => A) (fun _ => x)
-| constfunE : forall A B (f : A -> B) x, exprS Γ (fun _ => A) x -> exprS Γ (fun _ => B) (f o x)
-| varE : forall A (x : varS Γ A), exprS Γ A (eval_var x)
-| pairE : forall A B x y, exprS Γ A x -> exprS Γ B y -> exprS Γ (fun e => A e * B e) (fun e => (x e, y e))
-| existE : forall A (B : forall e, A e -> Type) x y (ex : exprS Γ A x),
-    exprS Γ (fun e => B e (x e)) y ->
-    exprS Γ (fun e => sig (fun x : A e => B e x)) (fun e => (x e; y e)).
+Inductive exprS (Γ : ctxS) : Type -> Type :=
+| constE : forall A, A -> exprS Γ A
+| constfunE : forall A B, (A -> B) -> exprS Γ A -> exprS Γ B
+| varE : forall A,  varS A Γ -> exprS Γ A
+| pairE : forall A B, exprS Γ A -> exprS Γ B -> exprS Γ (A * B).
 
-Fixpoint uses_embeddings {T Γ A x} (a : @exprS T Γ A x) : Type :=
-  match a with
-  | constE A a => forall b, IsHProp (a = b)
-  | constfunE A B f x a => IsEmbedding f * uses_embeddings a
-  | varE _ _ => Unit
-  | pairE A B x y a b => uses_embeddings a * uses_embeddings b
-  | existE A B x y a b => uses_embeddings a * uses_embeddings b
+Fixpoint eval_expr {Γ A} (e : exprS Γ A) : eval_ctx Γ -> A :=
+  match e with
+  | constE A x => fun _ => x
+  | constfunE A B f a => f o (eval_expr a)
+  | varE A x => eval_var x
+  | pairE A B a b => fun x => (eval_expr a x, eval_expr b x)
   end.
 
-Fixpoint ishprop_uses_embeddings `{Funext} {T Γ A x} (a : @exprS T Γ A x) : IsHProp (uses_embeddings a)
+Fixpoint uses_embeddings {Γ A} (a : exprS Γ A) : Type :=
+  match a with
+  | constE A a => forall b, IsHProp (a = b)
+  | constfunE A B f a => IsEmbedding f * uses_embeddings a
+  | varE _ _ => Unit
+  | pairE A B a b => uses_embeddings a * uses_embeddings b
+  end.
+
+Fixpoint ishprop_uses_embeddings `{Funext} {Γ A} (a : exprS Γ A) : IsHProp (uses_embeddings a)
   := match a with
      | constE A _ => trunc_forall
-     | constfunE A B f x a => trunc_prod
+     | constfunE A B f a => trunc_prod
      | varE _ _ => trunc_succ
-     | pairE A B x y a b => trunc_prod
-     | existE A B x y a b => trunc_prod
+     | pairE A B a b => trunc_prod
      end.
 Existing Instance ishprop_uses_embeddings.
 
@@ -69,79 +82,125 @@ Definition merge_count x y :=
   | Many => Many
   end.
 
-Fixpoint counts {T} (Γ : ctxS T) : Type :=
+Fixpoint counts (Γ : ctxS) : Type :=
   match Γ with
-    | nilS => Unit
-    | consS A Γ B => counts Γ * count
+    | nil => Unit
+    | A :: Γ => count * counts Γ
   end.
 
-Fixpoint merge_counts {T Γ} : counts Γ -> counts Γ -> counts Γ
+Fixpoint merge_counts {Γ} : counts Γ -> counts Γ -> counts Γ
   := match Γ return counts Γ -> counts Γ -> counts Γ with
-     | nilS => fun _ _ => tt
-     | consS A Γ B =>
+     | nil => fun _ _ => tt
+     | A :: Γ =>
        fun c1 c2 =>
-         (merge_counts (fst c1) (fst c2), merge_count (snd c1) (snd c2))
+         (merge_count (fst c1) (fst c2), merge_counts (snd c1) (snd c2))
      end.
 
-Fixpoint counts_init {T} (Γ : ctxS T) : counts Γ
+Fixpoint counts_init (Γ : ctxS) : counts Γ
   := match Γ with
-     | nilS => tt
-     | consS A Γ B => (counts_init Γ, Never)
+     | nil => tt
+     | A :: Γ => (Never, counts_init Γ)
      end.
 
-Definition cond_of_count {A} (B : A -> Type) c :=
+Definition cond_of_count A c :=
   match c with
-  | Never => forall x, IsHProp (B x)
+  | Never => IsHProp A
   | Once => Unit
-  | Many => forall x, IsHSet (B x)
+  | Many => IsHSet A
   end.
 
-Fixpoint cond_of_counts {T Γ} : @counts T Γ -> Type :=
+Definition hset_of_count@{i} (A:Type@{i}) c : Type@{i} :=
+  match c with
+  | Many => IsHSet A
+  | Never | Once => Unit
+  end.
+
+Fixpoint cond_of_counts {Γ} : counts Γ -> Type :=
   match Γ return counts Γ -> Type with
-  | nilS => fun _ => Unit
-  | consS A Γ B =>
-    fun c => cond_of_counts (fst c) * cond_of_count B (snd c)
+  | nil => fun _ => Unit
+  | A :: Γ =>
+    fun c => cond_of_count A (fst c) * cond_of_counts (snd c)
   end.
 
-Fixpoint counts_of_var {T Γ A} (x : @varS T Γ A) : counts Γ :=
+Fixpoint hset_of_counts {Γ} : counts Γ -> Type :=
+  match Γ return counts Γ -> Type with
+  | nil => fun _ => Unit
+  | A :: Γ =>
+    fun c => hset_of_count A (fst c) * hset_of_counts (snd c)
+  end.
+
+Definition hset_unmerge_count {A} c1 c2 (Hcs : hset_of_count A (merge_count c1 c2))
+  : hset_of_count A c1 * hset_of_count A c2.
+Proof.
+  destruct c1,c2;simpl in *;auto.
+Qed.
+
+Fixpoint hset_unmerge_counts {Γ} : forall c1 c2 : counts Γ,
+    hset_of_counts (merge_counts c1 c2) ->
+    hset_of_counts c1 * hset_of_counts c2.
+Proof.
+  destruct Γ as [|A Γ];simpl;intros c1 c2.
+  - intros _;exact (tt,tt).
+  - intros [HA HΓ].
+    apply hset_unmerge_counts in HΓ.
+    apply hset_unmerge_count in HA.
+    destruct HA as [HA1 HA2], HΓ as [HΓ1 HΓ2];auto.
+Qed.
+
+Fixpoint cond_implies_hset {Γ} : forall c : counts Γ, cond_of_counts c -> hset_of_counts c.
+Proof.
+  destruct Γ as [|A Γ];simpl;intros c.
+  - intros _; exact tt.
+  - refine (functor_prod _ (cond_implies_hset _ (snd c))).
+    generalize (fst c);clear c;intros c;destruct c;simpl;auto.
+Qed.
+
+Fixpoint counts_of_var {A Γ} (x : varS A Γ) : counts Γ :=
   match x with
-  | here A Γ B =>
-    (counts_init Γ, Once)
-  | next A Γ B x C =>
-    (counts_of_var x, Never)
+  | here Γ =>
+    (Once, counts_init Γ)
+  | next Γ x B =>
+    (Never, counts_of_var x)
   end.
 
-Fixpoint count_expr {T Γ A x} (a : @exprS T Γ A x) : counts Γ
+Fixpoint count_expr {Γ A} (a : exprS Γ A) : counts Γ
   := match a with
      | constE A a => counts_init Γ
-     | constfunE A B f x a => count_expr a
+     | constfunE A B f a => count_expr a
      | varE A x => counts_of_var x
-     | pairE A B x y a b => merge_counts (count_expr b) (count_expr a)
-     | existE A B x y a b => merge_counts (count_expr b) (count_expr a)
+     | pairE A B a b => merge_counts (count_expr a) (count_expr b)
      end.
 
-Definition global_cond {T Γ A x} (a : @exprS T Γ A x)
+Definition global_cond {Γ A} (a : exprS Γ A)
   := cond_of_counts (count_expr a).
 
 
 (* expressions describing functions such that we can prove the function is an embedding. *)
-Inductive mexpr : forall A B, (A -> B) -> Type :=
-| mconst : forall A B x, mexpr A B (fun _ => x)
-| mid : forall A, mexpr A A idmap
-| mapplyl : forall A B C g f, mexpr A B f -> mexpr A C (g o f)
-| mapplyr : forall A B C g f, mexpr B C g -> mexpr A C (g o f)
-| mexist : forall A B C D (f : A -> B) (g : forall x, C x -> D (f x)),
-    mexpr A B f -> (forall x, mexpr _ _ (g x)) ->
-    mexpr _ _ (functor_sigma f g)
-.
+Inductive mexpr : Type -> Type -> Type :=
+| mconst : forall A B, B -> mexpr A B
+| mid : forall A, mexpr A A
+| mapplyl : forall A B C, (B -> C) -> mexpr A B -> mexpr A C
+| mapplyr : forall A B C, mexpr B C -> (A -> B) -> mexpr A C
+| mpair : forall A B C D,
+    mexpr A B -> mexpr C D ->
+    mexpr (A * C) (B * D).
 
-Fixpoint mcond {A B f} (e : mexpr A B f) :=
+Fixpoint eval_mexpr {A B} (e : mexpr A B) : A -> B
+  := match e with
+     | mconst A B x => fun _ => x
+     | mid A => idmap
+     | mapplyl A B C g ef => g o (eval_mexpr ef)
+     | mapplyr A B C eg f => (eval_mexpr eg) o f
+     | mpair A B C D ef eg => functor_prod (eval_mexpr ef) (eval_mexpr eg)
+     end.
+
+Fixpoint mcond {A B} (e : mexpr A B) :=
   match e with
   | mconst A B x => IsHProp A * forall y, IsHProp (x = y)
   | mid _ => Unit
-  | mapplyl A B C g f ef => IsEmbedding g * mcond ef
-  | mapplyr A B C g f eg => mcond eg * IsEmbedding f
-  | mexist A B C D f g ef eg => mcond ef * (forall x, mcond (eg x))
+  | mapplyl A B C g ef => IsEmbedding g * mcond ef
+  | mapplyr A B C eg f => mcond eg * IsEmbedding f
+  | mpair A B C D ef eg => mcond ef * mcond eg
   end.
 
 Instance isembedding_constant A {B} (x : B) `{!IsHProp A} `{!forall y, IsHProp (x = y)}
@@ -149,95 +208,9 @@ Instance isembedding_constant A {B} (x : B) `{!IsHProp A} `{!forall y, IsHProp (
 Proof.
 intros y;apply ishprop_sigma_disjoint. intros;apply path_ishprop.
 Qed.
-
-Instance isembedding_functor_sigma {A B C D} (f : A -> B) (g : forall x, C x -> D (f x))
-         {fembed : IsEmbedding f} {gembed : forall x, IsEmbedding (g x)}
-  : IsEmbedding (functor_sigma f g).
-Proof.
-  intros [y1 y2].
-  unfold hfiber.
-  srefine (trunc_equiv' (sig (fun p : hfiber f y1 => hfiber (g p.1) (transport _ p.2^ y2))) _).
-  srefine (equiv_adjointify _ _ _ _).
-  - intros p. exists (p.1.1;p.2.1).
-    simpl. apply (path_sigma' _ p.1.2).
-    apply moveR_transport_p.
-    exact p.2.2.
-  - intros p. srefine ((p.1.1;_);(p.1.2;_));simpl.
-    + exact (pr1_path p.2).
-    + apply moveL_transport_V. exact (pr2_path p.2).
-  - intros [[x1 x2] p];simpl in *. apply ap.
-    revert p;apply (equiv_ind (path_sigma_uncurried _ _ _)).
-    simpl;intros [p1 p2].
-    destruct p1,p2;simpl. reflexivity.
-  - intros [[x1 p1] [x2 p2]];simpl in *.
-    destruct p1;simpl in p2. destruct p2;reflexivity.
-Defined.
-
-Instance isembedding_compose {A B C} (g : B -> C) (f : A -> B) `{!IsEmbedding g} `{!IsEmbedding f}
-  : IsEmbedding (g o f).
-Proof.
-  apply apequiv_embedding.
-  apply apequiv_compose;apply embedding_apequiv,_.
-Qed.
-
-Fixpoint isembedding_mcond {A B f} (e : mexpr A B f) : mcond e -> IsEmbedding f.
-Proof.
-  destruct e as [A B x|A|A B C g f ef|A B C g f eg|A B C D f g ef eg];simpl;intros Hcond.
-  - destruct Hcond as [HA HB];apply isembedding_constant;apply _.
-  - apply apequiv_embedding. intros x y. apply isequiv_homotopic with idmap;[exact _|].
-    intros p. Symmetry. apply ap_idmap.
-  - destruct Hcond as [Hg Hf].
-    apply isembedding_compose.
-    + exact Hg.
-    + exact (isembedding_mcond _ _ _ _ Hf).
-  - destruct Hcond as [Hg Hf].
-    apply isembedding_compose.
-    + exact (isembedding_mcond _ _ _ _ Hg).
-    + exact Hf.
-  - destruct Hcond as [Hf Hg].
-    apply isembedding_functor_sigma.
-    + exact (isembedding_mcond _ _ _ _ Hf).
-    + intros x;exact (isembedding_mcond _ _ _ _ (Hg x)).
-Qed.
-
-Module TestExists.
-  Section TestExists.
-
-    Variables (A:Type) (B:A -> Type).
-
-    Definition ctx := consS _ (consS _ nilS (fun _ => A)) (fun e => B e.2).
-
-    Definition varx : varS ctx (fun _ => A).
-    Proof.
-      refine (next _ _ (fun _ => A) _ _).
-      apply here.
-    Defined.
-
-    Definition vary : varS ctx (fun e => B e.1.2) := here _ _ _.
-
-    Definition expr : exprS ctx (fun _ => sig B) (fun e => (e.1.2;e.2)).
-    Proof.
-      apply existE.
-      - exact (varE _ _ varx).
-      - exact (varE _ _ vary).
-    Defined.
-
-    Definition expr_has_cond : global_cond expr.
-    Proof.
-      compute. auto.
-    Defined.
-
-    Definition expr_uses_embeddings : uses_embeddings expr.
-    Proof.
-      compute. auto.
-    Defined.
-
-  End TestExists.
-End TestExists.
-
-Instance isembedding_pair {A B C D} (f : A -> B) (g : C -> D)
+Instance isembedding_functor_prod {A B C D} (f : A -> B) (g : C -> D)
          {fembed : IsEmbedding f} {gembed : IsEmbedding g}
-  : IsEmbedding (fun x => (f (fst x), g (snd x))).
+  : IsEmbedding (functor_prod f g).
 Proof.
   intros [y1 y2].
   unfold hfiber.
@@ -260,7 +233,9 @@ Proof.
       apply (@ap_snd_path_prod _ _ (_,_) (_,_)).
 Defined.
 
-Instance isembedding_dup_hset {A} {Aset : IsHSet A} : IsEmbedding (fun x : A => (x,x)).
+Definition dup A (x : A) := (x,x).
+
+Instance isembedding_dup_hset {A} {Aset : IsHSet A} : IsEmbedding (dup A).
 Proof.
   intros [y1 y2].
   unfold hfiber;simpl. apply ishprop_sigma_disjoint.
@@ -268,3 +243,248 @@ Proof.
   apply (ap fst) in p1;apply (ap fst) in p2;simpl in p1, p2.
   path_via y1.
 Defined.
+
+Instance isembedding_compose {A B C} (g : B -> C) (f : A -> B) `{!IsEmbedding g} `{!IsEmbedding f}
+  : IsEmbedding (g o f).
+Proof.
+  apply apequiv_embedding.
+  apply apequiv_compose;apply embedding_apequiv,_.
+Qed.
+
+Fixpoint isembedding_mcond {A B} (e : mexpr A B) : mcond e -> IsEmbedding (eval_mexpr e).
+Proof.
+  destruct e as [A B x|A|A B C g ef|A B C eg f|A B C D ef eg];simpl;intros Hcond.
+  - destruct Hcond as [HA HB];apply isembedding_constant;apply _.
+  - apply apequiv_embedding. intros x y. apply isequiv_homotopic with idmap;[exact _|].
+    intros p. Symmetry. apply ap_idmap.
+  - destruct Hcond as [Hg Hf].
+    apply isembedding_compose.
+    + exact Hg.
+    + exact (isembedding_mcond _ _ _ Hf).
+  - destruct Hcond as [Hg Hf].
+    apply isembedding_compose.
+    + exact (isembedding_mcond _ _ _ Hg).
+    + exact Hf.
+  - destruct Hcond as [Hf Hg].
+    apply isembedding_functor_prod.
+    + exact (isembedding_mcond _ _ _ Hf).
+    + exact (isembedding_mcond _ _ _ Hg).
+Qed.
+
+Fixpoint subctx {Γ} : counts Γ -> Type :=
+  match Γ with
+  | nil => fun _ => Unit
+  | A :: Γ =>
+    fun c => match fst c with
+          | Never => subctx (snd c)
+          | _ => A * subctx (snd c)
+          end
+  end.
+
+Fixpoint subctx_into {Γ} : forall c : counts Γ, eval_ctx Γ -> subctx c.
+Proof.
+  destruct Γ as [|A Γ].
+  - simpl. intros _ _;exact tt.
+  - simpl. intros c. destruct (fst c).
+    + exact ((subctx_into _ _) o snd).
+    + exact (functor_prod idmap (subctx_into _ _)).
+    + exact (functor_prod idmap (subctx_into _ _)).
+Defined.
+
+Lemma isembedding_fst_hprop A B `{!IsHProp B} : IsEmbedding (@fst A B).
+Proof.
+  intros x. unfold hfiber. apply hprop_allpath.
+  intros [[x1 y1] p1] [[x2 y2] p2];simpl in *.
+  pose proof (path_ishprop y1 y2) as p3.
+  destruct p1,p2,p3. reflexivity.
+Qed.
+
+Lemma isembedding_snd_hprop A B `{!IsHProp A} : IsEmbedding (@snd A B).
+Proof.
+  intros x. unfold hfiber. apply hprop_allpath.
+  intros [[x1 y1] p1] [[x2 y2] p2];simpl in *.
+  pose proof (path_ishprop x1 x2) as p3.
+  destruct p1,p2,p3. reflexivity.
+Qed.
+
+Instance isembedding_isequiv {A B} (f : A -> B) `{!IsEquiv f} : IsEmbedding f.
+Proof.
+  apply apequiv_embedding. apply _.
+Qed.
+
+Fixpoint isembedding_subctx_into {Γ} : forall c : counts Γ,
+    cond_of_counts c -> IsEmbedding (subctx_into c).
+Proof.
+  destruct Γ as [|A Γ];simpl.
+  - intros _ _;apply _.
+  - intros [[] c];simpl;intros [HA HΓ].
+    + apply isembedding_compose;[apply isembedding_subctx_into,HΓ|].
+      apply isembedding_snd_hprop,_.
+    + apply isembedding_subctx_into in HΓ. apply isembedding_functor_prod;apply _.
+    + apply isembedding_subctx_into in HΓ. apply isembedding_functor_prod;apply _.
+Qed.
+
+Section NotaSec.
+  Notation __ := (_:_ -> _).
+
+  Definition merge_aux A B C D : A * B * (C * D) -> B * C * (A * D).
+  Proof.
+    refine (__ o (equiv_prod_assoc _ _ _)).
+    refine (__ o (functor_prod (equiv_prod_assoc A B C)^-1 idmap)).
+    refine (__ o (functor_prod (equiv_prod_symm _ _) idmap)).
+    exact ((equiv_prod_assoc _ _ _)^-1).
+  Defined.
+
+  Fixpoint merge_subctx {Γ} : forall c1 c2 : counts Γ,
+      subctx (merge_counts c1 c2) ->
+      subctx c1 * subctx c2.
+  Proof.
+    destruct Γ as [|A Γ];simpl;intros c1 c2.
+    - intros _;exact (tt,tt).
+    - destruct c1 as [[] c1], c2 as [[] c2];simpl.
+      + exact (merge_subctx _ _ _).
+      + refine (__ o (functor_prod (idmap:A->A) (merge_subctx _ c1 c2))).
+        refine (__ o (equiv_prod_assoc _ _ _)).
+        refine (__ o (functor_prod (equiv_prod_symm _ _) idmap)).
+        exact ((equiv_prod_assoc _ _ _)^-1).
+      + refine (__ o (functor_prod (idmap:A->A) (merge_subctx _ c1 c2))).
+        refine (__ o (equiv_prod_assoc _ _ _)).
+        refine (__ o (functor_prod (equiv_prod_symm _ _) idmap)).
+        exact ((equiv_prod_assoc _ _ _)^-1).
+      + refine ((equiv_prod_assoc _ _ _) o _).
+        refine (functor_prod idmap _).
+        exact (merge_subctx _ _ _).
+      + refine (__ o (functor_prod (dup A) (merge_subctx _ _ _))).
+        exact (merge_aux _ _ _ _).
+      + refine (__ o (functor_prod (dup A) (merge_subctx _ _ _))).
+        exact (merge_aux _ _ _ _).
+      + exact ((equiv_prod_assoc _ _ _) o (functor_prod idmap (merge_subctx _ _ _))).
+      + refine (__ o (functor_prod (dup A) (merge_subctx _ _ _))).
+        exact (merge_aux _ _ _ _).
+      + refine (__ o (functor_prod (dup A) (merge_subctx _ _ _))).
+        exact (merge_aux _ _ _ _).
+  Defined.
+
+End NotaSec.
+
+Instance isequiv_merge_aux A B C D : IsEquiv (merge_aux A B C D).
+Proof.
+  unfold merge_aux. apply _.
+Qed.
+
+Fixpoint init_contr Γ : Contr (subctx (counts_init Γ)).
+Proof.
+  destruct Γ as [|A Γ];simpl.
+  - exact contr_unit.
+  - apply init_contr.
+Defined.
+Existing Instance init_contr.
+
+Opaque functor_prod equiv_prod_assoc equiv_prod_symm merge_aux dup.
+
+Fixpoint isembedding_merge_subctx {Γ} : forall c1 c2 : counts Γ,
+    hset_of_counts (merge_counts c1 c2) ->
+    IsEmbedding (merge_subctx c1 c2).
+Proof.
+  destruct Γ as [|A Γ];simpl.
+  - intros _ _ _. apply _.
+  - intros [c1 cs1] [c2 cs2] [h hs];simpl in *.
+    apply isembedding_merge_subctx in hs.
+    destruct c1,c2;simpl in *;apply _.
+Qed.
+Transparent functor_prod equiv_prod_assoc equiv_prod_symm merge_aux dup.
+
+Fixpoint mexpr_var {A Γ} (x : varS A Γ) : mexpr (subctx (counts_of_var x)) A.
+Proof.
+  destruct x as [Γ|Γ x B];simpl.
+  - apply mapplyr with A.
+    + apply mid.
+    + exact fst.
+  - apply mexpr_var.
+Defined.
+
+Fixpoint mexpr_of {Γ A} (e : exprS Γ A) : mexpr (subctx (count_expr e)) A.
+Proof.
+  destruct e as [A x|A B f a|A x|A B a b];simpl.
+  - apply mconst. exact x.
+  - apply mapplyl with A.
+    + exact f.
+    + apply mexpr_of.
+  - apply mexpr_var.
+  - eapply mapplyr.
+    + apply mpair;apply mexpr_of.
+    + exact (merge_subctx (count_expr a) (count_expr b)).
+Defined.
+
+Fixpoint mcond_var {A Γ} (x : varS A Γ) : mcond (mexpr_var x).
+Proof.
+  destruct x as [Γ|Γ x B];simpl.
+  - apply (pair tt).
+    apply isembedding_fst_hprop. exact _.
+  - apply mcond_var.
+Qed.
+
+Fixpoint mexpr_preserves_embeddings {Γ A} (e : exprS Γ A)
+  : hset_of_counts (count_expr e) -> uses_embeddings e -> mcond (mexpr_of e).
+Proof.
+  destruct e as [A x|A B f a|A x|A B a b];simpl.
+  - intros _ HA;split;exact _.
+  - intros H. apply (functor_prod idmap). apply mexpr_preserves_embeddings,H.
+  - intros _ _. apply mcond_var.
+  - intros HS HE.
+    split.
+    + apply hset_unmerge_counts in HS.
+      exact (functor_prod (mexpr_preserves_embeddings _ _ _ (fst HS))
+                          (mexpr_preserves_embeddings _ _ _ (snd HS)) HE).
+    + apply isembedding_merge_subctx. exact HS.
+Qed.
+
+Fixpoint path_mexpr_var {A Γ} (x : varS A Γ) : forall y,
+    eval_mexpr (mexpr_var x) (subctx_into (counts_of_var x) y) = eval_var x y.
+Proof.
+  destruct x as [Γ|Γ x B];simpl.
+  - auto.
+  - intros [_ y]. auto.
+Qed.
+
+Fixpoint merge_subctx_into {Γ} : forall (c1 c2 : counts Γ) x,
+    merge_subctx c1 c2 (subctx_into _ x) = (subctx_into c1 x, subctx_into c2 x).
+Proof.
+  destruct Γ as [|A Γ];simpl.
+  - intros;reflexivity.
+  - intros [[] c1] [[] c2] [x xs];simpl;try solve [rewrite merge_subctx_into; reflexivity].
+    + unfold merge_aux,functor_prod;simpl. rewrite merge_subctx_into; reflexivity.
+    + unfold merge_aux,functor_prod;simpl. rewrite merge_subctx_into; reflexivity.
+    + unfold merge_aux,functor_prod;simpl. rewrite merge_subctx_into; reflexivity.
+    + unfold merge_aux,functor_prod;simpl. rewrite merge_subctx_into; reflexivity.
+Qed.
+
+Fixpoint path_mexpr_of {Γ A} (e : exprS Γ A) : forall x,
+    eval_mexpr (mexpr_of e) (subctx_into (count_expr e) x) = eval_expr e x.
+Proof.
+  destruct e as [A x|A B f a|A x|A B a b];simpl.
+  - auto.
+  - intros x. apply ap. auto.
+  - apply path_mexpr_var.
+  - intros x. rewrite merge_subctx_into. unfold functor_prod. simpl.
+    apply path_prod';apply path_mexpr_of.
+Qed.
+
+Lemma istruncmap_homotopic {n A B} (f : A -> B) {g} `{!IsTruncMap n f} : f == g -> IsTruncMap n g.
+Proof.
+  intros Heq.
+  intros y. apply (trunc_equiv' (hfiber f y));[|exact _].
+  apply Fibrations.equiv_hfiber_homotopic. exact Heq.
+Defined.
+
+Theorem isembedding_eval_expr {Γ A} (e : exprS Γ A)
+  : global_cond e -> uses_embeddings e -> IsEmbedding (eval_expr e).
+Proof.
+  intros H1 H2.
+  refine (istruncmap_homotopic _ (path_mexpr_of e)).
+  apply isembedding_compose.
+  - apply isembedding_mcond. apply mexpr_preserves_embeddings.
+    + apply cond_implies_hset,H1.
+    + exact H2.
+  - apply isembedding_subctx_into. exact H1.
+Qed.
