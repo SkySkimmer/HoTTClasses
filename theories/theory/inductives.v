@@ -147,6 +147,57 @@ Module Simple.
       exact (IH _ _ _ idpath).
     Qed.
 
+    Definition IndPack := {i : index & IndT i}.
+    Definition recarg x := forall y, IndT (indreciota S x y).
+
+    Definition IndPackC (x : sig recarg) : IndPack
+      := (_; IndC x.1 x.2).
+
+    Definition unpack1 (x : IndPack) := match x with (_;IndC x _) => x end.
+    Definition unpack2 x : recarg (unpack1 x).
+    Proof.
+      destruct x as [i [x y]]. exact y.
+    Defined.
+
+    Definition path_pack_uncurried (u v : IndPack)
+      : {p : unpack1 u = unpack1 v &
+             transport recarg p (unpack2 u) = unpack2 v} ->
+        u = v.
+    Proof.
+      destruct u as [_ [u recu]], v as [_ [v recv]]. simpl.
+      intros [p1 p2]. destruct p1;simpl in p2;destruct p2;reflexivity.
+    Defined.
+
+    Definition unpack1_path {u v} (p : u = v) : unpack1 u = unpack1 v := ap unpack1 p.
+
+    Definition unpack2_path {u v} (p : u = v)
+      : transport recarg (unpack1_path p) (unpack2 u) = unpack2 v
+      := (transport_compose recarg unpack1 p (unpack2 u))^ @ apD unpack2 p.
+
+    Instance isequiv_path_pack u v : IsEquiv (path_pack_uncurried u v).
+    Proof.
+      srefine (isequiv_adjointify _ _ _ _).
+      - intros p;exact (unpack1_path p; unpack2_path p).
+      - intros [];destruct u as [_ [u recu]], v as [_ [v recv]];reflexivity.
+      - destruct u as [_ [u recu]], v as [_ [v recv]];simpl;intros [p1 p2].
+        destruct p1, p2. reflexivity.
+    Defined.
+
+    (* NB: [IsEmbedding iota] is NOT an hypothesis! *)
+    Lemma isembedding_pack : IsEmbedding IndPackC.
+    Proof.
+      apply jections.apequiv_embedding;red.
+      intros [x recx] [y recy].
+      srefine (isequiv_adjointify _ _ _ _).
+      - intros e. apply Sigma.path_sigma_uncurried. simpl.
+        apply (path_pack_uncurried _ _)^-1 in e. exact e.
+      - red;apply (equiv_ind (path_pack_uncurried _ _)).
+        intros [p1 p2]. simpl in p1,p2.
+        destruct p1, p2;simpl. reflexivity.
+      - red;apply (equiv_ind (Sigma.path_sigma_uncurried _ _ _)).
+        intros [p1 p2];simpl in p1, p2;destruct p1,p2;simpl. reflexivity.
+    Qed.
+
   End WithS.
 
   Module Examples.
@@ -971,8 +1022,6 @@ Module Abstract.
 
         Definition pathS : ConstrS A nil
           := ConstrFinal _ (constE _ A a).
-
-        Check (idpath : complex_of pathS tt = Complex.Examples.Path.pathS A a).
 
         Lemma ishprop_paths_hset {Aset : IsHSet A} : forall b, IsHProp (paths a b).
         Proof.
