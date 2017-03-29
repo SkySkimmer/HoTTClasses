@@ -858,16 +858,16 @@ Module Abstract.
     Context {index : Type}.
 
     (* A constructor. *)
-    Inductive ConstrS {A} (Γ : ctxS A) : Type :=
-    | ConstrUniform : forall B, @ConstrS (sig B) (consS A Γ B) -> ConstrS Γ
-    | ConstrPositive : (A -> Complex.PositiveS index) -> ConstrS Γ -> @ConstrS A Γ
-    | ConstrFinal : exprS Γ (fun _ => index) -> @ConstrS A Γ
+    Inductive ConstrS (Γ : ctxS) : Type :=
+    | ConstrUniform : forall A, ConstrS (A :: Γ) -> ConstrS Γ
+    | ConstrPositive : (eval_ctx Γ -> Complex.PositiveS index) -> ConstrS Γ -> ConstrS Γ
+    | ConstrFinal : exprS Γ index -> ConstrS Γ
     .
 
-    Fixpoint complex_of {A Γ} (spec : @ConstrS A Γ) : A -> Complex.ConstrS index
+    Fixpoint complex_of {Γ} (spec : ConstrS Γ) : eval_ctx Γ -> Complex.ConstrS index
       := match spec with
-         | ConstrUniform B f =>
-           fun a => Complex.ConstrUniform (B a) (fun b => complex_of f (a;b))
+         | ConstrUniform A f =>
+           fun a => Complex.ConstrUniform A (fun b => complex_of f (b, a))
          | ConstrPositive pos spec =>
            fun a => Complex.ConstrPositive (pos a) (complex_of spec a)
          | ConstrFinal i =>
@@ -877,20 +877,20 @@ Module Abstract.
     Section WithT.
       Variable T : index -> Type.
 
-      Fixpoint constrT {A Γ} (spec : @ConstrS A Γ) : A -> Type
+      Fixpoint constrT {Γ} (spec : ConstrS Γ) : eval_ctx Γ -> Type
         := match spec with
-           | ConstrUniform B f =>
-             fun a => forall x : B a, constrT f (a;x)
+           | ConstrUniform A f =>
+             fun a => forall x : A, constrT f (x,a)
            | ConstrPositive pos spec =>
              fun a => (Complex.positiveT T (pos a)) -> constrT spec a
            | ConstrFinal i =>
              fun a => T (eval_expr i a)
            end.
 
-      Lemma constrT_ok : forall A Γ (spec : @ConstrS A Γ) (a : A),
+      Lemma constrT_ok : forall Γ (spec : ConstrS Γ) a,
           constrT spec a = Complex.constrT T (complex_of spec a).
       Proof.
-        intros A Γ spec a;induction spec as [A Γ B f IHf | A Γ pos spec IH | A Γ i];simpl.
+        intros Γ spec a;induction spec as [Γ A f IHf | Γ pos spec IH | Γ i];simpl.
         - apply (ap (fun g => forall x, g x)),path_forall;intros b.
           apply IHf.
         - apply (ap (fun g => _ -> g) (IH a)).
@@ -900,57 +900,67 @@ Module Abstract.
       (** We could define and show equivalence for the definitions of recursors etc but why bother. *)
     End WithT.
 
-    Fixpoint extract_iota {A Γ} (spec : @ConstrS A Γ) : exists A' Δ, @exprS A' Δ (fun _ => index)
-      := match spec with
-         | ConstrUniform B f => extract_iota f
-         | ConstrPositive _ spec => extract_iota spec
-         | ConstrFinal i => (_;(_;i))
-         end.
+    Fixpoint abstract_condition {Γ} (spec : ConstrS Γ) : Type :=
+      match spec with
+      | ConstrUniform A spec => abstract_condition spec
+      | ConstrPositive _ spec => abstract_condition spec
+      | ConstrFinal i => global_cond i * uses_embeddings i
+      end.
 
-    Fixpoint extract_iota_nonrec {A Γ} (spec : @ConstrS A Γ)
-      : (exists a, Compile.nonrec_of (complex_of spec a)) <~> (extract_iota spec).1.
-    Proof.
-      destruct spec as [B f|pos spec|i];simpl.
-      - exact ((extract_iota_nonrec _ _ f)
-                 oE (Sigma.equiv_sigma_assoc B (fun p => Compile.nonrec_of (complex_of f p)))).
-      - apply extract_iota_nonrec.
-      - apply Sigma.equiv_sigma_contr,_.
-    Defined.
+    Definition compile (spec : ConstrS nil) : Simple.InductiveS index
+      := Compile.of_constrS (complex_of spec tt).
 
-    Fixpoint extract_iota_eval {A Γ} (spec : @ConstrS A Γ)
-      : eval_expr (extract_iota spec).2.2 =
-        fun x => Compile.iota_of (complex_of spec ((extract_iota_nonrec spec)^-1 x).1)
-                              ((extract_iota_nonrec spec)^-1 x).2.
+    Definition prenonrec {Γ} (spec : ConstrS Γ) γ
+      := Compile.nonrec_of (complex_of spec γ).
+
+    Definition preiota {Γ} (spec : ConstrS Γ) γ : prenonrec spec γ -> index
+      := Compile.iota_of (complex_of spec γ).
+
+    Fixpoint isembedding_preiota {Γ} (spec : ConstrS Γ)
+      : abstract_condition spec -> IsEmbedding (fun γ => preiota spec γ.1 γ.2).
     Proof.
-      destruct spec as [B f|pos spec|i];simpl.
-      - apply extract_iota_eval.
-      - apply extract_iota_eval.
-      - reflexivity.
+      destruct spec as [A spec|pos spec|i];simpl;intros H.
+      - apply isembedding_preiota in H.
+        srefine (istruncmap_full_homotopic _ equiv_idmap _ _ H _).
+        + unfold prenonrec;simpl.
+          refine (_ oE _);[|Symmetry; apply Sigma.equiv_sigma_prod].
+          apply Sigma.equiv_sigma_symm.
+        + intros x;reflexivity.
+      - apply isembedding_preiota in H. exact H.
+      - unfold prenonrec, preiota;simpl.
+        destruct H as [H0 H1].
+        pose proof (isembedding_eval_expr _ H0 H1) as H;clear H0 H1.
+        srefine (istruncmap_full_homotopic _ equiv_idmap _ _ H _).
+        + Symmetry; apply Sigma.equiv_sigma_contr.
+          exact _.
+        + intros x;reflexivity.
     Qed.
 
-    Theorem criterion_uses_embedding : forall (spec : ConstrS nilS),
-        uses_embeddings (extract_iota spec).2.2 ->
-        Simple.criterion (Compile.of_constrS (complex_of spec tt)).
+    Theorem condition_suffices : forall spec,
+        abstract_condition spec ->
+        forall i, IsHProp (Simple.IndT (compile spec) i).
     Proof.
-      red. simpl. intros spec H x y.
-      cut (IsEmbedding (eval_expr (extract_iota spec).2.2)).
-      - intros ise. rewrite (extract_iota_eval spec) in ise.
-        apply jections.embedding_apequiv.
-    Admitted.
-
+      intros spec H. apply Simple.criterion_hprop.
+      red. apply jections.embedding_apequiv.
+      unfold compile. apply isembedding_preiota in H.
+      srefine (istruncmap_full_homotopic _ equiv_idmap _ _ H _).
+      - unfold prenonrec. simpl.
+        exact (@Sigma.equiv_contr_sigma Unit _ _).
+      - intros x;reflexivity.
+    Qed.
 
   End VarSec.
-  Arguments ConstrS index {A} Γ : clear implicits.
+  Arguments ConstrS index Γ : clear implicits.
 
   Module Examples.
 
     Module Nat.
 
-      Definition nat0 : ConstrS Unit nilS
+      Definition nat0 : ConstrS Unit nil
         := ConstrFinal _ (constE _ Unit tt).
 
-      Definition natS : ConstrS Unit nilS
-        := ConstrUniform _ (fun _ => Unit) (ConstrFinal _ (constE _ Unit tt)).
+      Definition natS : ConstrS Unit nil
+        := ConstrPositive _ (fun _ => Complex.PositiveFinal tt) (ConstrFinal _ (constE _ Unit tt)).
 
       (* TODO multiple constructors *)
     End Nat.
@@ -959,7 +969,7 @@ Module Abstract.
       Section VarSec.
         Variables (A:Type) (a:A).
 
-        Definition pathS : ConstrS A nilS
+        Definition pathS : ConstrS A nil
           := ConstrFinal _ (constE _ A a).
 
         Check (idpath : complex_of pathS tt = Complex.Examples.Path.pathS A a).
@@ -971,9 +981,12 @@ Module Abstract.
                                (Compile.compile_equiv
                                   _ _
                                   (Complex.Examples.Path.path_is_ind A a) b) _ _).
-          apply Simple.criterion_hprop;clear b.
-          apply (criterion_uses_embedding pathS).
-          simpl. exact (Aset a). (* ← lol *)
+          revert b.
+          set (spec := _ : Complex.ConstrS _).
+          change spec with (complex_of pathS tt);clear spec.
+          apply Abstract.condition_suffices.
+          simpl. unfold global_cond;simpl. apply (pair tt).
+          exact (Aset a). (* ← lol *)
         Qed.
       End VarSec.
     End Paths.

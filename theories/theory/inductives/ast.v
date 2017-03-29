@@ -470,6 +470,52 @@ Proof.
     apply path_prod';apply path_mexpr_of.
 Qed.
 
+Lemma equiv_hfiber_right {A A' B} (f : A -> A') `{!IsEquiv f} (g : A' -> B) y
+  : hfiber g y <~> hfiber (g o f) y.
+Proof.
+  srefine (equiv_adjointify _ _ _ _);unfold hfiber.
+  - intros [x ex];exists (f^-1 x).
+    path_via (g x). apply ap,eisretr.
+  - intros [x ex];exists (f x).
+    exact ex.
+  - intros [x ex]. destruct ex.
+    rewrite concat_p1.
+    apply (path_sigma' _ (eissect _ _)).
+    rewrite transport_paths_Fl.
+    rewrite ap_compose,eisadj.
+    apply concat_Vp.
+  - intros [x ex]. destruct ex.
+    rewrite concat_p1.
+    apply (path_sigma' _ (eisretr _ _)).
+    rewrite transport_paths_Fl.
+    apply concat_Vp.
+Qed.
+
+Lemma equiv_hfiber_left {A B B'} (f : A -> B) (g : B -> B') `{!IsEmbedding g} y
+  : hfiber f y <~> hfiber (g o f) (g y).
+Proof.
+  srefine (equiv_adjointify _ _ _ _);unfold hfiber.
+  - intros [x ex]. exists x. apply ap,ex.
+  - intros [x ex]; exists x. exact ((ap g)^-1 ex).
+  - intros [x ex]. apply ap,eisretr.
+  - intros [x ex]. apply ap,eissect.
+Qed.
+
+Lemma istruncmap_full_homotopic {n A B A' B'} (fA : A <~> A') (fB : B <~> B')
+      (f : A -> B) (g : A' -> B')
+  : IsTruncMap n f -> fB o f o fA^-1 == g -> IsTruncMap n g.
+Proof.
+  intros Hf He y.
+  apply (trunc_equiv' (hfiber f (fB^-1 y)));[|exact _].
+  refine (_ oE _).
+  { Symmetry. exact (equiv_hfiber_right fA g y). }
+  refine (_ oE _).
+  2:exact (equiv_hfiber_left _ fB _).
+  rewrite eisretr.
+  apply Fibrations.equiv_hfiber_homotopic;clear y.
+  intros x. rewrite <-He,eissect. reflexivity.
+Qed.
+
 Lemma istruncmap_homotopic {n A B} (f : A -> B) {g} `{!IsTruncMap n f} : f == g -> IsTruncMap n g.
 Proof.
   intros Heq.
