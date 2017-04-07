@@ -23,11 +23,11 @@ Inductive varS (A : Type) : ctxS -> Type :=
 | here : forall Γ, varS A (A :: Γ)
 | next : forall Γ, varS A Γ -> forall B, varS A (B :: Γ).
 
-Fixpoint nat_varS {A Γ} (x : @varS A Γ) : nat :=
-  match x with
-  | here _ => 0
-  | next Γ x B => S (nat_varS x)
-  end.
+(* Fixpoint nat_varS {A Γ} (x : @varS A Γ) : nat := *)
+(*   match x with *)
+(*   | here _ => 0 *)
+(*   | next Γ x B => S (nat_varS x) *)
+(*   end. *)
 
 Fixpoint eval_var {A Γ} (x : varS A Γ) : eval_ctx Γ -> A
   := match x with

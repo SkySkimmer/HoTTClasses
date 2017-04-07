@@ -131,16 +131,14 @@ Module Simple.
                                           (sect_IndT_to_IndT' i)).
     Qed.
 
-    Definition criterion := forall x y, IsEquiv (@ap _ _ (iota S) x y).
-
-    Theorem criterion_hprop (Hc : criterion) : forall i, IsHProp (IndT i).
+    Theorem criterion_hprop (Hc : IsEmbedding (iota S)) : forall i, IsHProp (IndT i).
     Proof.
       intros i;apply hprop_allpath.
       revert i.
       cut (forall i (x : IndT i) j (y : IndT j) (e : i = j), e # x = y);
         [intros E i x y;exact (E i x i y idpath)|].
       induction x as [a x IH]; destruct y as [b y].
-      apply (@equiv_ind _ _ _ (Hc _ _)).
+      apply (@equiv_ind _ _ _ (jections.embedding_apequiv _ Hc _ _)).
       intros e;destruct e;simpl.
       apply ap.
       apply path_forall;intro k.
@@ -199,6 +197,178 @@ Module Simple.
     Qed.
 
   End WithS.
+
+  (* Section Foo. *)
+  (*   Context {index : Type}. *)
+  (*   Variable (S : InductiveS index). *)
+
+  (*   (* Inductive pathlike : forall i j, i = j -> IndT S i -> IndT S j -> Type := *) *)
+  (*   (* | pathlikeC : forall nr1 nr2 (r1 : recarg S nr1) (r2 : recarg S nr2) (e : nr1 = nr2), *) *)
+  (*   (*     (forall y, pathlike _ _ idpath (r1 y) (r2 y)) -> *) *)
+  (*   (*     pathlike _ _ (ap (iota S) e) (IndC S nr1 r1) (IndC S nr2 r2). *) *)
+
+  (*   Record paths_nonrec := *)
+  (*     mkPspec { Px : nonrec S; *)
+  (*               Py : nonrec S; *)
+  (*               Pp : Px = Py; *)
+  (*               Pa : recarg S Px; *)
+  (*               Pb : recarg S Py }. *)
+
+  (*   Record paths_index := *)
+  (*     mkPindex { Pi : index; *)
+  (*                Pj : index; *)
+  (*                Pe : Pi = Pj; *)
+  (*                Pix : IndT S Pi; *)
+  (*                Piy : IndT S Pj }. *)
+
+  (*   Record paths_aux nr := *)
+  (*     mkAux { Ax : indrecdomain S (Px nr); *)
+  (*             Ay : indrecdomain S (Py nr); *)
+  (*             Ap : (Pp nr) # Ax = Ay }. *)
+  (*   Arguments Ax {nr} _. *)
+  (*   Arguments Ay {nr} _. *)
+  (*   Arguments Ap {nr} _. *)
+
+  (*   Lemma Ap' nr k : indreciota S (Px nr) (Ax k) = indreciota S (Py nr) (Ay k). *)
+  (*   Proof. *)
+  (*     destruct nr as [x y p a b], k as [kx ky kp]. simpl in *. *)
+  (*     destruct p;simpl in kp;destruct kp. reflexivity. *)
+  (*   Defined. *)
+
+  (*   Definition paths_spec : InductiveS paths_index. *)
+  (*   Proof. *)
+  (*     simple refine (mkIndS paths_nonrec (mkRecS paths_aux _) _). *)
+  (*     - simpl;intros xs k. *)
+  (*       srefine (mkPindex _ _ _ _ _). *)
+  (*       + exact (indreciota S (Px xs) (Ax k)). *)
+  (*       + exact (indreciota S (Py xs) (Ay k)). *)
+  (*       + apply Ap'. *)
+  (*       + exact (Pa xs (Ax k)). *)
+  (*       + exact (Pb xs (Ay k)). *)
+  (*     - intros nr. srefine (mkPindex _ _ _ _ _). *)
+  (*       + exact (iota S (Px nr)). *)
+  (*       + exact (iota S (Py nr)). *)
+  (*       + exact (ap _ (Pp nr)). *)
+  (*       + exact (IndC S (Px nr) (Pa nr)). *)
+  (*       + exact (IndC S (Py nr) (Pb nr)). *)
+  (*   Defined. *)
+
+  (*   Definition pathlike := IndT paths_spec. *)
+
+  (*   Fixpoint path_pathlike x (p : pathlike x) {struct p} : Pe x # Pix x = Piy x. *)
+  (*   Proof. *)
+  (*     destruct p as [[x y e a b] r]. destruct e; simpl in *. *)
+  (*     apply ap,path_forall;intros k. *)
+  (*     set (Tk := paths_aux _) in r. *)
+  (*     transparent assert ( k' : Tk ). *)
+  (*     { srefine (mkAux _ _ _ _);simpl. *)
+  (*       - exact k. *)
+  (*       - exact k. *)
+  (*       - exact idpath. *)
+  (*     } *)
+  (*     exact (path_pathlike _ (r k')). *)
+  (*   Defined. *)
+
+  (*   Definition reflindex i x := {| Pi := i; Pj := i; Pe := idpath; Pix := x; Piy := x|}. *)
+
+  (*   Fixpoint pathlike_refl i x : pathlike (reflindex i x). *)
+  (*   Proof. *)
+  (*     destruct x as [x a]. *)
+  (*     refine (IndC paths_spec (mkPspec x x idpath a a) _). *)
+  (*     simpl. intros y. *)
+  (*     destruct y as [k1 k2 pk]. simpl in *. *)
+  (*     destruct pk. apply pathlike_refl. *)
+  (*   Defined. *)
+
+  (*   Definition pathlike_path x (p : Pe x # Pix x = Piy x) : pathlike x. *)
+  (*   Proof. *)
+  (*     destruct x as [i j e x y]. *)
+  (*     simpl in p. *)
+  (*     destruct e;simpl in p. destruct p;apply pathlike_refl. *)
+  (*   Defined. *)
+
+  (*   Lemma ap_1' : forall A B (f : A -> B) x (e : x = x), e = idpath -> ap f e = idpath. *)
+  (*   Proof. *)
+  (*     intros A B f x e ee. *)
+  (*     symmetry in ee. destruct ee;apply ap_1. *)
+  (*   Qed. *)
+
+  (*   Lemma path_forall_1' A B (f : forall x : A, B x) e *)
+  (*     : (forall x, e x = idpath) -> path_forall f f e = idpath. *)
+  (*   Proof. *)
+  (*     intros ee. *)
+  (*     pose proof (path_forall _ _ ee)^ as ee'. destruct ee'. *)
+  (*     apply Forall.path_forall_1. *)
+  (*   Qed. *)
+
+  (*   Fixpoint pathlike_issect i x : path_pathlike _ (pathlike_refl i x) = idpath. *)
+  (*   Proof. *)
+  (*     destruct x as [x a]. *)
+  (*     set (r := pathlike_refl _ _). *)
+  (*     change r with (IndC paths_spec (mkPspec x x idpath a a) (fun y => pathlike_refl _ _)). *)
+  (*     clear r. *)
+  (*     set (b := fun y => pathlike_refl _ _). *)
+  (*     set (p := path_pathlike _ _). *)
+  (*     change p with (ap (IndC S x) (path_forall _ _ (fun k => path_pathlike _ (b k)))). *)
+  (*     clear p. *)
+  (*     set (spec := mkPspec _ _ _ _ _) in *. *)
+  (*     apply (ap_1' _ _ (IndC S x)). *)
+  (*     apply path_forall_1'. *)
+  (*     intros;apply pathlike_issect. *)
+  (*   Qed. *)
+
+  (*   Lemma pathlike_path_rec x a b p *)
+  (*     : pathlike_path (_; (IndC S x a, IndC S x b)) (ap (IndC S x) p) *)
+  (*       = IndC paths_spec {| Px := x; Py := x; Pp := idpath; Pa := a; Pb := b |} *)
+  (*              (fun y => pathlike_path (_; (a y, b y)) (apD10 p y)). *)
+  (*   Proof. *)
+  (*     destruct p. reflexivity. *)
+  (*   Qed. *)
+
+  (*   Fixpoint pathlike_isretr x p : pathlike_path x (path_pathlike x p) = p. *)
+  (*   Proof. *)
+  (*     destruct p as [[x y p a b] r]. *)
+  (*     simpl in r. *)
+  (*     set (e := path_pathlike _ _). *)
+  (*     destruct p. simpl in r. *)
+  (*     change e with (ap (IndC S x) (path_forall a b (fun k => path_pathlike _ (r k)))). *)
+  (*     clear e. *)
+  (*     set (i := iota _ _). simpl in i. unfold i;clear i. *)
+  (*     set (p := path_forall _ _ _). *)
+  (*     rewrite pathlike_path_rec. simpl. *)
+  (*     apply ap,path_forall;intros y. *)
+  (*     simpl in y. unfold p;clear p. *)
+  (*     rewrite Forall.apD10_path_forall. *)
+  (*     apply pathlike_isretr. *)
+  (*   Qed. *)
+
+  (*   Lemma pathlike_correct : forall x, pathlike x <~> fst x.2 = snd x.2. *)
+  (*   Proof. *)
+  (*     intros x;refine (equiv_adjointify (path_pathlike x) (pathlike_path x) _ _). *)
+  (*     - red. destruct x as [i [x y]];intros p;simpl in p. destruct p. apply pathlike_issect. *)
+  (*     - red;apply pathlike_isretr. *)
+  (*   Qed. *)
+
+  (*   Goal IsTruncMap (minus_two.+1 .+1) (iota S) -> forall i, IsHSet (IndT S i). *)
+  (*   Proof. *)
+  (*     intros Hc i p q. change (IsHProp (p = q)). *)
+  (*     apply (@trunc_equiv' _ _ (pathlike_correct (_;(_,_)))). *)
+  (*     apply criterion_hprop;clear p q. red. *)
+  (*     simpl. *)
+  (*     pose proof (jections.truncmap_S_ap_truncmap _ _ Hc) as Hc'. clear Hc. *)
+  (*     intros x. *)
+  (*     unfold hfiber. apply hprop_allpath. *)
+  (*     intros [a pa] [b pb]. *)
+  (*     destruct pb. *)
+  (*     destruct a as [x y [] a b0]. *)
+  (*     destruct b as [x' y' [] a' b']. rename b0 into b. *)
+  (*     simpl in pa. *)
+  (*     revert pa; apply (equiv_ind (Sigma.path_sigma_uncurried _ _ _)). *)
+  (*     intros [p p']. simpl in p, p'. *)
+
+  (*   Abort. *)
+
+  (* End Foo. *)
 
   Module Examples.
     Module Path.
@@ -992,7 +1162,6 @@ Module Abstract.
         forall i, IsHProp (Simple.IndT (compile spec) i).
     Proof.
       intros spec H. apply Simple.criterion_hprop.
-      red. apply jections.embedding_apequiv.
       unfold compile. apply isembedding_preiota in H.
       srefine (istruncmap_full_homotopic _ equiv_idmap _ _ H _).
       - unfold prenonrec. simpl.
