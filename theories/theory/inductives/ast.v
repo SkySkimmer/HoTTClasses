@@ -324,52 +324,46 @@ Proof.
     + apply isembedding_subctx_into in HΓ. apply isembedding_functor_prod;apply _.
 Qed.
 
-Section NotaSec.
-  Notation __ := (_:_ -> _).
+Definition merge_aux1 A B C D : A * B * (C * D) -> B * C * (A * D)
+  := (equiv_prod_assoc _ _ _)^-1 o
+                             (functor_prod (equiv_prod_symm _ _) idmap) o
+                             (functor_prod (equiv_prod_assoc A B C)^-1 idmap) o
+                             (equiv_prod_assoc _ _ _).
+Definition merge_aux2 A B C : A * (B * C) -> B * (A * C)
+  := (equiv_prod_assoc _ _ _)^-1 o
+                             (functor_prod (equiv_prod_symm _ _) idmap) o
+                             (equiv_prod_assoc _ _ _).
 
-  Definition merge_aux A B C D : A * B * (C * D) -> B * C * (A * D).
-  Proof.
-    refine (__ o (equiv_prod_assoc _ _ _)).
-    refine (__ o (functor_prod (equiv_prod_assoc A B C)^-1 idmap)).
-    refine (__ o (functor_prod (equiv_prod_symm _ _) idmap)).
-    exact ((equiv_prod_assoc _ _ _)^-1).
-  Defined.
-
-  Fixpoint merge_subctx {Γ} : forall c1 c2 : counts Γ,
-      subctx (merge_counts c1 c2) ->
-      subctx c1 * subctx c2.
-  Proof.
-    destruct Γ as [|A Γ];simpl;intros c1 c2.
-    - intros _;exact (tt,tt).
-    - destruct c1 as [[] c1], c2 as [[] c2];simpl.
-      + exact (merge_subctx _ _ _).
-      + refine (__ o (functor_prod (idmap:A->A) (merge_subctx _ c1 c2))).
-        refine (__ o (equiv_prod_assoc _ _ _)).
-        refine (__ o (functor_prod (equiv_prod_symm _ _) idmap)).
-        exact ((equiv_prod_assoc _ _ _)^-1).
-      + refine (__ o (functor_prod (idmap:A->A) (merge_subctx _ c1 c2))).
-        refine (__ o (equiv_prod_assoc _ _ _)).
-        refine (__ o (functor_prod (equiv_prod_symm _ _) idmap)).
-        exact ((equiv_prod_assoc _ _ _)^-1).
-      + refine ((equiv_prod_assoc _ _ _) o _).
-        refine (functor_prod idmap _).
-        exact (merge_subctx _ _ _).
-      + refine (__ o (functor_prod (dup A) (merge_subctx _ _ _))).
-        exact (merge_aux _ _ _ _).
-      + refine (__ o (functor_prod (dup A) (merge_subctx _ _ _))).
-        exact (merge_aux _ _ _ _).
-      + exact ((equiv_prod_assoc _ _ _) o (functor_prod idmap (merge_subctx _ _ _))).
-      + refine (__ o (functor_prod (dup A) (merge_subctx _ _ _))).
-        exact (merge_aux _ _ _ _).
-      + refine (__ o (functor_prod (dup A) (merge_subctx _ _ _))).
-        exact (merge_aux _ _ _ _).
-  Defined.
-
-End NotaSec.
-
-Instance isequiv_merge_aux A B C D : IsEquiv (merge_aux A B C D).
+Fixpoint merge_subctx {Γ} : forall c1 c2 : counts Γ,
+    subctx (merge_counts c1 c2) ->
+    subctx c1 * subctx c2.
 Proof.
-  unfold merge_aux. apply _.
+  destruct Γ as [|A Γ];simpl;intros c1 c2.
+  - intros _;exact (tt,tt).
+  - destruct c1 as [[] c1], c2 as [[] c2];simpl.
+    + exact (merge_subctx _ _ _).
+    + exact ((merge_aux2 _ _ _) o
+                                (functor_prod (idmap:A->A) (merge_subctx _ c1 c2))).
+    + exact ((merge_aux2 _ _ _) o
+                                (functor_prod (idmap:A->A) (merge_subctx _ c1 c2))).
+    + refine ((equiv_prod_assoc _ _ _) o _).
+      refine (functor_prod idmap _).
+      exact (merge_subctx _ _ _).
+    + exact ((merge_aux1 _ _ _ _) o (functor_prod (dup A) (merge_subctx _ _ _))).
+    + exact ((merge_aux1 _ _ _ _) o (functor_prod (dup A) (merge_subctx _ _ _))).
+    + exact ((equiv_prod_assoc _ _ _) o (functor_prod idmap (merge_subctx _ _ _))).
+    + exact ((merge_aux1 _ _ _ _) o (functor_prod (dup A) (merge_subctx _ _ _))).
+    + exact ((merge_aux1 _ _ _ _) o (functor_prod (dup A) (merge_subctx _ _ _))).
+Defined.
+
+Instance isequiv_merge_aux1 A B C D : IsEquiv (merge_aux1 A B C D).
+Proof.
+  unfold merge_aux1. exact _.
+Qed.
+
+Instance isequiv_merge_aux2 A B C : IsEquiv (merge_aux2 A B C).
+Proof.
+  unfold merge_aux2. exact _.
 Qed.
 
 Fixpoint init_contr Γ : Contr (subctx (counts_init Γ)).
@@ -380,7 +374,7 @@ Proof.
 Defined.
 Existing Instance init_contr.
 
-Opaque functor_prod equiv_prod_assoc equiv_prod_symm merge_aux dup.
+Opaque functor_prod equiv_prod_assoc equiv_prod_symm merge_aux1 merge_aux2 dup.
 
 Fixpoint isembedding_merge_subctx {Γ} : forall c1 c2 : counts Γ,
     hset_of_counts (merge_counts c1 c2) ->
@@ -392,7 +386,7 @@ Proof.
     apply isembedding_merge_subctx in hs.
     destruct c1,c2;simpl in *;apply _.
 Qed.
-Transparent functor_prod equiv_prod_assoc equiv_prod_symm merge_aux dup.
+Transparent functor_prod equiv_prod_assoc equiv_prod_symm merge_aux1 merge_aux2 dup.
 
 Fixpoint mexpr_var {A Γ} (x : varS A Γ) : mexpr (subctx (counts_of_var x)) A.
 Proof.
@@ -453,10 +447,8 @@ Proof.
   destruct Γ as [|A Γ];simpl.
   - intros;reflexivity.
   - intros [[] c1] [[] c2] [x xs];simpl;try solve [rewrite merge_subctx_into; reflexivity].
-    + unfold merge_aux,functor_prod;simpl. rewrite merge_subctx_into; reflexivity.
-    + unfold merge_aux,functor_prod;simpl. rewrite merge_subctx_into; reflexivity.
-    + unfold merge_aux,functor_prod;simpl. rewrite merge_subctx_into; reflexivity.
-    + unfold merge_aux,functor_prod;simpl. rewrite merge_subctx_into; reflexivity.
+    all:(unfold merge_aux1,functor_prod;simpl;
+      rewrite merge_subctx_into; reflexivity).
 Qed.
 
 Fixpoint path_mexpr_of {Γ A} (e : exprS Γ A) : forall x,
