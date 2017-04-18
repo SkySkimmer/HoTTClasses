@@ -1019,8 +1019,9 @@ Module Compile.
           etransitivity.
           { simpl. unfold sum_arrow_forall_ind.
             set (C := fun _ => T _).
-            set (CP := (fun _ => forall _, _)).
-            set (df := fun _ _ => _).
+            (* Triggers not enough lambda/lets anomaly. *)
+            (* set (CP := (fun _ => forall _, _)). *)
+            (* set (df := fun _ _ => _). *)
             set (f' := (_,_)).
             eapply ap10. exact (@equiv_ind_comp _ _ (@sum_ind_uncurried _ _ C) _ _ _ f'). }
           simpl. set (TP := fun yl => P _ _).
@@ -1144,7 +1145,7 @@ Module Abstract.
       - apply isembedding_preiota in H.
         srefine (istruncmap_full_homotopic _ equiv_idmap _ _ H _).
         + unfold prenonrec;simpl.
-          refine (_ oE _);[|Symmetry; apply Sigma.equiv_sigma_prod].
+          refine (_ oE _);[|symmetry; apply Sigma.equiv_sigma_prod].
           apply Sigma.equiv_sigma_symm.
         + intros x;reflexivity.
       - apply isembedding_preiota in H. exact H.
@@ -1152,7 +1153,7 @@ Module Abstract.
         destruct H as [H0 H1].
         pose proof (isembedding_eval_expr _ H0 H1) as H;clear H0 H1.
         srefine (istruncmap_full_homotopic _ equiv_idmap _ _ H _).
-        + Symmetry; apply Sigma.equiv_sigma_contr.
+        + symmetry; apply Sigma.equiv_sigma_contr.
           exact _.
         + intros x;reflexivity.
     Qed.

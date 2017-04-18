@@ -256,7 +256,7 @@ Proof.
   destruct e as [A B x|A|A B C g ef|A B C eg f|A B C D ef eg];simpl;intros Hcond.
   - destruct Hcond as [HA HB];apply isembedding_constant;apply _.
   - apply apequiv_embedding. intros x y. apply isequiv_homotopic with idmap;[exact _|].
-    intros p. Symmetry. apply ap_idmap.
+    intros p. symmetry. apply ap_idmap.
   - destruct Hcond as [Hg Hf].
     apply isembedding_compose.
     + exact Hg.
@@ -508,7 +508,7 @@ Proof.
   intros Hf He y.
   apply (trunc_equiv' (hfiber f (fB^-1 y)));[|exact _].
   refine (_ oE _).
-  { Symmetry. exact (equiv_hfiber_right fA g y). }
+  { symmetry. exact (equiv_hfiber_right fA g y). }
   refine (_ oE _).
   2:exact (equiv_hfiber_left _ fB _).
   rewrite eisretr.
