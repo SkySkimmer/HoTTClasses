@@ -204,8 +204,11 @@ Module Simple.
     apply path_pathInd,b.
   Defined.
 
-  Definition pathIota : {a : _ & recarg a * recarg a} -> {i : _ & IndT i * IndT i}
-    := fun nr => (iota S nr.1; (IndC nr.1 (fst nr.2), IndC nr.1 (snd nr.2))).
+  Definition pathIota : {a : _ & recarg a * recarg a} -> {i : _ & IndT i * IndT i}.
+  Proof.
+    srefine (Sigma.functor_sigma (iota S) _). simpl.
+    exact (fun a nr => (IndC a (fst nr), IndC a (snd nr))).
+  Defined.
 
   End WithS.
 
