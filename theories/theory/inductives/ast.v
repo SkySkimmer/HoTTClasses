@@ -208,6 +208,7 @@ Instance isembedding_constant A {B} (x : B) `{!IsHProp A} `{!forall y, IsHProp (
 Proof.
 intros y;apply ishprop_sigma_disjoint. intros;apply path_ishprop.
 Qed.
+
 Instance isembedding_functor_prod {A B C D} (f : A -> B) (g : C -> D)
          {fembed : IsEmbedding f} {gembed : IsEmbedding g}
   : IsEmbedding (functor_prod f g).
@@ -232,6 +233,30 @@ Proof.
       simpl;clear lhs.
       apply (@ap_snd_path_prod _ _ (_,_) (_,_)).
 Defined.
+
+Instance isembedding_functor_sigma {A B C D} (f : A -> B) (g : forall x, C x -> D (f x))
+         {fembed : IsEmbedding f} {gembed : forall x, IsEmbedding (g x)}
+  : IsEmbedding (functor_sigma f g).
+Proof.
+  intros [y1 y2];unfold hfiber.
+  srefine (trunc_equiv' {x : hfiber f y1 & hfiber (g x.1) _} _).
+  { exact (transport _ x.2^ y2). }
+  srefine (equiv_adjointify _ _ _ _).
+  - intros [[x px] [x' px']]. simpl in *.
+    exists (x;x'). unfold functor_sigma;simpl.
+    destruct px;simpl in px';destruct px';reflexivity.
+  - intros [[x x'] p];unfold functor_sigma in p;simpl in *.
+    apply (Sigma.path_sigma_uncurried _ _ _)^-1 in p. destruct p as [px px'].
+    simpl in *.
+    exists (x;px). simpl. exists x'.
+    apply moveL_transport_V. exact px'.
+  - intros [[x x'] p];simpl.
+    revert p;apply (equiv_ind (Sigma.path_sigma_uncurried _ _ _));simpl.
+    intros [px px']. destruct px;simpl in px';destruct px';simpl.
+    reflexivity.
+  - intros [[x px] [x' px']].
+    destruct px;simpl in px';destruct px'. simpl. reflexivity.
+Qed.
 
 Definition dup A (x : A) := (x,x).
 
