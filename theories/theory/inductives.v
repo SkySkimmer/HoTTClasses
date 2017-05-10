@@ -207,7 +207,7 @@ Module Simple.
   Definition pathIota : {a : _ & recarg a * recarg a} -> {i : _ & IndT i * IndT i}.
   Proof.
     srefine (Sigma.functor_sigma (iota S) _). simpl.
-    exact (fun a nr => (IndC a (fst nr), IndC a (snd nr))).
+    intros a. apply Prod.functor_prod;exact (IndC a).
   Defined.
 
   End WithS.
