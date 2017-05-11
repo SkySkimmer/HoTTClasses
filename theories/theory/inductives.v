@@ -211,152 +211,37 @@ Module Simple.
         intros [p1 p2];simpl in p1, p2;destruct p1,p2;simpl. reflexivity.
     Qed.
 
-  Inductive pathInd : forall i, IndT i -> IndT i -> Type :=
-    pathIndC : forall a x y, (forall b, pathInd _ (x b) (y b)) ->
-      pathInd (iota S a) (IndC a x) (IndC a y).
+    Inductive pathInd : forall i, IndT i -> IndT i -> Type :=
+      pathIndC : forall a x y,
+        (forall b, pathInd _ (x b) (y b)) ->
+        pathInd (iota S a) (IndC a x) (IndC a y).
 
-  Fixpoint pathInd_refl i x : pathInd i x x.
-  Proof.
-    destruct x as [a x].
-    constructor. intros b.
-    apply pathInd_refl.
-  Defined.
+    Fixpoint pathInd_refl i x : pathInd i x x.
+    Proof.
+      destruct x as [a x].
+      constructor. intros b.
+      apply pathInd_refl.
+    Defined.
 
-  Definition pathInd_path : forall i x y, x = y -> pathInd i x y.
-  Proof.
-    intros i x _ []. apply pathInd_refl.
-  Defined.
+    Definition pathInd_path : forall i x y, x = y -> pathInd i x y.
+    Proof.
+      intros i x _ []. apply pathInd_refl.
+    Defined.
 
-  Fixpoint path_pathInd i x y (p : pathInd i x y) : x = y.
-  Proof.
-    destruct p as [a x y b].
-    apply ap,path_forall;intros k.
-    apply path_pathInd,b.
-  Defined.
+    Fixpoint path_pathInd i x y (p : pathInd i x y) : x = y.
+    Proof.
+      destruct p as [a x y b].
+      apply ap,path_forall;intros k.
+      apply path_pathInd,b.
+    Defined.
 
-  Definition pathIota : {a : _ & recarg a * recarg a} -> {i : _ & IndT i * IndT i}.
-  Proof.
-    srefine (Sigma.functor_sigma (iota S) _). simpl.
-    intros a. apply Prod.functor_prod;exact (IndC a).
-  Defined.
+    Definition pathIota : {a : _ & recarg a * recarg a} -> {i : _ & IndT i * IndT i}.
+    Proof.
+      srefine (Sigma.functor_sigma (iota S) _). simpl.
+      intros a. apply Prod.functor_prod;exact (IndC a).
+    Defined.
 
   End WithS.
-
-  Section Data.
-    Record DataS :=
-      mkDataS { data_nr : Type;
-                data_rdom : data_nr -> Type; }.
-
-    Definition DataIndS (S : DataS) : InductiveS Unit
-      := {| nonrec := data_nr S;
-            indrecdomain := data_rdom S;
-            indreciota := fun _ _ => tt;
-            iota := fun _ => tt |}.
-
-    Global Coercion DataIndS : DataS >-> InductiveS.
-
-    Variable S : DataS.
-
-    Definition nrproj {i} : IndT S i -> nonrec S
-      := fun x => match x with IndC nr _ => nr end.
-
-    Definition rproj {i} : forall x : IndT S i, indrecdomain S (nrproj x) -> IndT S tt
-      := fun x => match x with IndC nr r => r end.
-
-    Definition data_destr (P : IndT S tt -> Type)
-      : (forall nr r, P (IndC S nr r)) ->
-        forall x, P x.
-    Proof.
-      intros HP.
-      assert (aux : forall i p (x:IndT S i), P (transport _ p x)).
-      { intros i p x;destruct x as [nr r]. simpl in *.
-        destruct (path_ishprop _ _ : idpath = p). simpl. apply HP. }
-      exact (aux tt idpath).
-    Defined.
-
-    Definition data_path_uncurried (x y : IndT S tt)
-      : { nrp : nrproj x = nrproj y &
-                transport (fun nr => indrecdomain S nr -> IndT S tt) nrp (rproj x) = rproj y } ->
-        x = y.
-    Proof.
-      destruct x as [nrx rx]. simpl in y. revert y.
-      refine (data_destr _ _).
-      intros nry ry;simpl in *.
-      intros [nrp rp];destruct nrp;simpl in rp;destruct rp;reflexivity.
-    Defined.
-
-    Definition nrproj_path {x y : IndT S tt} : x = y -> nrproj x = nrproj y
-      := ap nrproj.
-
-    Definition rproj_path {x y : IndT S tt} : forall p : x = y,
-        transport (fun nr => indrecdomain S nr -> IndT S tt) (nrproj_path p) (rproj x) = rproj y.
-    Proof.
-      intros p;destruct p. reflexivity.
-    Defined.
-
-    Definition data_path_back (x y : IndT S tt)
-      : x = y ->
-        { nrp : nrproj x = nrproj y &
-                transport (fun nr => indrecdomain S nr -> IndT S tt) nrp (rproj x) = rproj y }
-      := fun p => (nrproj_path p; rproj_path p).
-
-    Lemma data_path_retr x y : Sect (data_path_back x y) (data_path_uncurried x y).
-    Proof.
-      red. intros p;destruct p.
-      revert x;refine (data_destr _ _).
-      intros nr r;simpl.
-      set (p := path_ishprop _ _).
-      destruct (path_ishprop _ _ : idpath = p). simpl. reflexivity.
-    Qed.
-
-    Lemma data_path_sect x y : Sect (data_path_uncurried x y) (data_path_back x y).
-    Proof.
-      revert x;refine (data_destr _ _);intros nrx rx.
-      revert y;refine (data_destr _ _);intros nry ry.
-      intros [nrp rp].
-      simpl in *. destruct nrp;simpl in rp;destruct rp;simpl.
-      set (p := path_ishprop _ _);destruct (path_ishprop _ _ : idpath = p);simpl.
-      unfold data_path_back. simpl. reflexivity.
-    Qed.
-
-    Instance isequiv_data_path x y : IsEquiv (data_path_uncurried x y).
-    Proof.
-      refine (isequiv_adjointify _ (data_path_back x y) (data_path_retr x y) (data_path_sect x y)).
-    Defined.
-
-    Local Instance isembedding_data_pathIota {Hset : IsHSet (nonrec S)} : IsEmbedding (pathIota S).
-    Proof.
-      simpl in Hset.
-      intros [[] [x y]].
-      unfold hfiber;simpl.
-      apply hprop_allpath.
-      intros [[nr [r1 r2]] p] [[nr' [r1' r2']] p'].
-      revert p;apply (equiv_ind (Sigma.path_sigma_uncurried _ _ _)).
-      intros [p1 p2]. simpl in p1,p2.
-      revert p';apply (equiv_ind (Sigma.path_sigma_uncurried _ _ _)).
-      intros [p1' p2']. simpl in p1',p2'.
-      destruct (path_ishprop _ _ : idpath = p1).
-      destruct (path_ishprop _ _ : idpath = p1').
-      simpl in p2,p2'.
-      revert p2;apply (equiv_ind (Prod.path_prod_uncurried _ _)).
-      intros [p1 p2];simpl in p1,p2.
-      revert p2';apply (equiv_ind (Prod.path_prod_uncurried _ _)).
-      intros [p1' p2'];simpl in p1',p2'.
-      destruct p1',p2'.
-      simpl.
-      revert p1;apply (equiv_ind (data_path_uncurried _ _)).
-      intros [nrp rp].
-      revert p2;apply (equiv_ind (data_path_uncurried _ _)).
-      intros [nrp' rp'].
-      simpl in nrp,nrp'. destruct nrp'.
-      (* Here we use the [Hset] hypothesis *)
-      destruct (path_ishprop _ _ : idpath = nrp).
-      simpl in rp,rp'. destruct rp,rp'.
-      simpl. set (p := path_ishprop _ _).
-      destruct (path_ishprop _ _ : idpath = p). simpl. reflexivity.
-    Qed.
-
-  End Data.
 
   Module Examples.
     Module Path.
@@ -372,7 +257,7 @@ Module Simple.
         := IndC (pathS a) tt (fun y => match y with end).
 
       Definition path_rect : forall (A : Type) (a : A) (P : forall b : A, path a b -> Type),
-        P a (idpath a) -> forall (b : A) (p : path a b), P b p.
+          P a (idpath a) -> forall (b : A) (p : path a b), P b p.
       Proof.
         intros A a P Hrefl.
         apply IndT_rect;simpl.
@@ -558,7 +443,7 @@ Module Complex.
          end.
 
     Definition default_morphism (spec : ConstrS index)
-      (cA : constrT A spec) (rec: recursor cA) (cB: constrT B spec) : forall i, A i -> B i
+               (cA : constrT A spec) (rec: recursor cA) (cB: constrT B spec) : forall i, A i -> B i
       := rec _ (rec_arg_of_constr spec cA cB).
 
     Lemma default_is_morphism spec cA rec cB
@@ -588,8 +473,9 @@ Module Complex.
     Context {index : Type} {A : index -> Type}.
     Variable F : forall i, A i -> A i.
 
-    Lemma loop_is_id : forall spec c (rec: recursor c), is_morphism F spec c c ->
-                                                        forall i x, F i x = x.
+    Lemma loop_is_id : forall spec c (rec: recursor c),
+        is_morphism F spec c c ->
+        forall i x, F i x = x.
     Proof.
       intros spec c rec H.
       apply rec.
@@ -622,8 +508,8 @@ Module Complex.
       - apply path_forall;intros x;apply Fpos_compose.
     Qed.
 
-    Fixpoint compose_is_morphism spec
-      : forall cA cB cC, is_morphism F spec cA cB -> is_morphism G spec cB cC ->
+    Fixpoint compose_is_morphism spec : forall cA cB cC,
+        is_morphism F spec cA cB -> is_morphism G spec cB cC ->
         is_morphism (fun i => compose (G i) (F i)) spec cA cC.
     Proof.
       destruct spec as [T f|pos spec|i];intros cA cB cC mF mG;simpl.
