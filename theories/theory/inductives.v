@@ -65,34 +65,31 @@ Module Simple.
 
     Definition IndConstrT (A : index -> Type) nonrec recdomain reciota iota
       := forall x : nonrec,
-      (forall y : recdomain x, A (reciota x y)) ->
-      A (iota x).
+        (forall y : recdomain x, A (reciota x y)) ->
+        A (iota x).
 
     Inductive IndT : index -> Type :=
       IndC : IndConstrT IndT (nonrec S) (indrecdomain S) (indreciota S) (iota S).
 
-    Definition IndConstrT' (A : index -> Type) nonrec recdomain reciota iota
-      := forall x : nonrec,
-        (forall y : recdomain x, A (reciota x y)) ->
-        forall i, iota x = i ->
-             A i.
-
-    Inductive IndT' : index -> Type :=
-      IndC' : IndConstrT' IndT' (nonrec S) (indrecdomain S) (indreciota S) (iota S).
+    Inductive IndT' (i : index) : Type :=
+      IndC' : forall x : hfiber (iota S) i,
+        (forall y : indrecdomain S x.1, IndT' (indreciota S x.1 y)) ->
+        IndT' i.
 
     Fixpoint IndT_to_IndT' i (x : IndT i) : IndT' i.
     Proof.
       destruct x as [x rec].
-      apply (IndC' x).
-      - intros y;exact (IndT_to_IndT' _ (rec y)).
-      - reflexivity.
+      srefine (IndC' _ _ _).
+      - exact (x;idpath).
+      - intros y;apply IndT_to_IndT',rec.
     Defined.
 
-    Fixpoint IndT'_to_IndT i (x : IndT' i) : IndT i.
+    Fixpoint IndT'_to_IndT i (x : IndT' i)  : IndT i.
     Proof.
-      destruct x as [x rec i' []].
-      constructor.
-      intros y;exact (IndT'_to_IndT _ (rec y)).
+      destruct x as [x rec].
+      pose proof (fun y => IndT'_to_IndT _ (rec y)) as rec'.
+      clear IndT'_to_IndT rec. destruct x as [x []].
+      constructor. exact rec'.
     Defined.
 
     Lemma sect_IndT_to_IndT' : forall i, Sect (IndT_to_IndT' i) (IndT'_to_IndT i).
@@ -104,30 +101,63 @@ Module Simple.
 
     Lemma sect_IndT'_to_IndT : forall i, Sect (IndT'_to_IndT i) (IndT_to_IndT' i).
     Proof.
-      intros i x;induction x as [x rec IH i' []].
-      simpl. apply (ap (fun rec => IndC' x rec (iota S x) idpath)),path_forall;intros y.
+      intros i x;induction x as [i x rec IH];destruct x as [x []].
+      simpl. apply (ap (fun rec => IndC' _ (x;idpath) rec)),path_forall;intros y.
       apply IH.
     Qed.
 
-    Lemma isequiv_IndT_to_IndT' : forall i, IsEquiv (IndT_to_IndT' i).
+    Local Instance isequiv_IndT_to_IndT' : forall i, IsEquiv (IndT_to_IndT' i).
     Proof.
       intros i;exact (isequiv_adjointify _ (IndT'_to_IndT i)
-                                          (sect_IndT'_to_IndT i)
-                                          (sect_IndT_to_IndT' i)).
+                                         (sect_IndT'_to_IndT i)
+                                         (sect_IndT_to_IndT' i)).
+    Defined.
+
+    Definition sigInd i := { x : hfiber (iota S) i &
+                                 forall k : indrecdomain S x.1, IndT' (indreciota S x.1 k) }.
+
+    Definition IndT'_to_sigInd i : IndT' i -> sigInd i.
+    Proof.
+      intros [x rec];exact (x;rec).
+    Defined.
+
+    Definition sigInd_to_IndT' i : sigInd i -> IndT' i.
+    Proof.
+      intros [x rec];exact (IndC' i x rec).
+    Defined.
+
+    Local Instance isequiv_IndT'_to_sigInd i : IsEquiv (IndT'_to_sigInd i).
+    Proof.
+      srefine (BuildIsEquiv _ _ _ (sigInd_to_IndT' i) _ _ _).
+      - intros [x rec];reflexivity.
+      - intros [x rec];reflexivity.
+      - intros [x rec];simpl. reflexivity.
+    Defined.
+
+    Local Instance istrunc_IndT' {n} (Hi : IsTruncMap n.+1 (iota S)) : forall i, IsTrunc n.+1 (IndT' i).
+    Proof.
+      intros i x y. change IsTrunc_internal with IsTrunc.
+      revert y. induction x as [i x recx IH].
+      intros y;destruct y as [y recy].
+      pose (isequiv := @isequiv_ap _ _ _ (isequiv_IndT'_to_sigInd i)).
+      refine (trunc_equiv _ _);[|refine (isequiv_inverse _);apply isequiv];clear isequiv.
+      simpl.
+      refine (trunc_equiv _ _);[|apply Sigma.isequiv_path_sigma].
+      simpl.
+      apply @Sigma.trunc_sigma;[exact _|].
+      intros a;destruct a;simpl.
+      refine (trunc_equiv _ (path_forall _ _)).
+    Qed.
+
+    Lemma istrunc_IndT {n} (Hi : IsTruncMap n.+1 (iota S)) : forall i, IsTrunc n.+1 (IndT i).
+    Proof.
+      intros i;refine (trunc_equiv _ (IndT'_to_IndT _)).
+      exact (@isequiv_inverse _ _ _ (isequiv_IndT_to_IndT' _)).
     Qed.
 
     Theorem criterion_hprop (Hc : IsEmbedding (iota S)) : forall i, IsHProp (IndT i).
     Proof.
-      intros i;apply hprop_allpath.
-      revert i.
-      cut (forall i (x : IndT i) j (y : IndT j) (e : i = j), e # x = y);
-        [intros E i x y;exact (E i x i y idpath)|].
-      induction x as [a x IH]; destruct y as [b y].
-      apply (@equiv_ind _ _ _ (jections.embedding_apequiv _ Hc _ _)).
-      intros e;destruct e;simpl.
-      apply ap.
-      apply path_forall;intro k.
-      exact (IH _ _ _ idpath).
+      apply istrunc_IndT;exact _.
     Qed.
 
     Definition IndPack := {i : index & IndT i}.
