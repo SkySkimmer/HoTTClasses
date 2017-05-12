@@ -45,6 +45,26 @@ Proof.
   rewrite Forall.eta_path_forall. reflexivity.
 Qed.
 
+Lemma isembedding_incompatible_sum {A B C} (f : A -> C) (g : B -> C)
+      {Hf : IsEmbedding f} {Hg : IsEmbedding g}
+      (Hincompat : forall x x', f x <> g x')
+  : IsEmbedding (fun x : sum A B => match x with inl x => f x | inr x => g x end).
+Proof.
+  intros y. unfold hfiber.
+  srefine (trunc_equiv' _ (equiv_inverse (equiv_sigma_sum _ _ _))).
+  simpl.
+  apply ishprop_sum;try exact _.
+  intros [a pa] [b pb];destruct pb.
+  exact (Hincompat a b pa).
+Qed.
+
+Lemma istruncmap_sum {n A B C} (f : A -> C) (g : B -> C)
+      {Hf : IsTruncMap n.+2 f} {Hg : IsTruncMap n.+2 g}
+  : IsTruncMap n.+2 (fun x : sum A B => match x with inl x => f x | inr x => g x end).
+Proof.
+  intros y;unfold hfiber.
+  srefine (trunc_equiv' _ (equiv_inverse (equiv_sigma_sum _ _ _))).
+Qed.
 
 Module Simple.
 
@@ -274,6 +294,18 @@ Module Simple.
         simpl. reflexivity.
       Qed.
     End Path.
+
+    Module Acc.
+      Section VarSec.
+        Variable (A : Type) (R : A -> A -> Type).
+
+        Definition AccS : InductiveS A :=
+          {| nonrec := A;
+             indrecdomain := fun x => {y : A & R y x};
+             indreciota := fun x y => y.1;
+             iota := idmap |}.
+      End VarSec.
+    End Acc.
   End Examples.
 End Simple.
 
