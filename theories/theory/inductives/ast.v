@@ -272,16 +272,33 @@ Defined.
 Instance isembedding_compose {A B C} (g : B -> C) (f : A -> B) `{!IsEmbedding g} `{!IsEmbedding f}
   : IsEmbedding (g o f).
 Proof.
-  apply apequiv_embedding.
-  apply apequiv_compose;apply embedding_apequiv,_.
+  intros z.
+  refine (trunc_equiv' {y : hfiber g z & hfiber f y.1} _).
+  srefine (equiv_adjointify _ _ _ _).
+  - intros yx;exists yx.2.1.
+    path_via (g yx.1.1).
+  - intros x. refine ((f x.1;x.2);(x.1;idpath));simpl.
+  - intros x. simpl. change x with (x.1;x.2) at 6.
+    apply ap,concat_1p.
+  - intros yx.
+    destruct yx as [[y py] [x px]],py;simpl in px;destruct px;reflexivity.
+Qed.
+
+Instance istruncmap_S {n A B} (f : A -> B) {Hf : IsTruncMap n f} : IsTruncMap n.+1 f.
+Proof.
+  intros y;apply _.
+Qed.
+
+Instance isembedding_isequiv {A B} (f : A -> B) `{!IsEquiv f} : IsEmbedding f.
+Proof.
+  apply istruncmap_S. red;apply EquivalenceVarieties.fcontr_isequiv,_.
 Qed.
 
 Fixpoint isembedding_mcond {A B} (e : mexpr A B) : mcond e -> IsEmbedding (eval_mexpr e).
 Proof.
   destruct e as [A B x|A|A B C g ef|A B C eg f|A B C D ef eg];simpl;intros Hcond.
   - destruct Hcond as [HA HB];apply isembedding_constant;apply _.
-  - apply apequiv_embedding. intros x y. apply isequiv_homotopic with idmap;[exact _|].
-    intros p. symmetry. apply ap_idmap.
+  - apply _.
   - destruct Hcond as [Hg Hf].
     apply isembedding_compose.
     + exact Hg.
@@ -330,11 +347,6 @@ Proof.
   intros [[x1 y1] p1] [[x2 y2] p2];simpl in *.
   pose proof (path_ishprop x1 x2) as p3.
   destruct p1,p2,p3. reflexivity.
-Qed.
-
-Instance isembedding_isequiv {A B} (f : A -> B) `{!IsEquiv f} : IsEmbedding f.
-Proof.
-  apply apequiv_embedding. apply _.
 Qed.
 
 Fixpoint isembedding_subctx_into {Γ} : forall c : counts Γ,

@@ -219,7 +219,7 @@ Module Simple.
     (* NB: [IsEmbedding iota] is NOT an hypothesis! *)
     Lemma isembedding_pack : IsEmbedding IndPackC.
     Proof.
-      apply jections.apequiv_embedding;red.
+      apply Fibrations.isembedding_isequiv_ap.
       intros [x recx] [y recy].
       srefine (isequiv_adjointify _ _ _ _).
       - intros e. apply Sigma.path_sigma_uncurried. simpl.
