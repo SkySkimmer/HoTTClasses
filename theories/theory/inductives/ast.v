@@ -50,22 +50,22 @@ Fixpoint eval_expr {Γ A} (e : exprS Γ A) : eval_ctx Γ -> A :=
   | pairE A B a b => fun x => (eval_expr a x, eval_expr b x)
   end.
 
-Fixpoint uses_embeddings {Γ A} (a : exprS Γ A) : Type :=
+Fixpoint uses_truncmaps n {Γ A} (a : exprS Γ A) : Type :=
   match a with
-  | constE A a => forall b, IsHProp (a = b)
-  | constfunE A B f a => IsEmbedding f * uses_embeddings a
+  | constE A a => forall b, IsTrunc n (a = b)
+  | constfunE A B f a => IsTruncMap n f * uses_truncmaps n a
   | varE _ _ => Unit
-  | pairE A B a b => uses_embeddings a * uses_embeddings b
+  | pairE A B a b => uses_truncmaps n a * uses_truncmaps n b
   end.
 
-Fixpoint ishprop_uses_embeddings `{Funext} {Γ A} (a : exprS Γ A) : IsHProp (uses_embeddings a)
+Fixpoint ishprop_uses_truncmaps `{Funext} {n Γ A} (a : exprS Γ A) : IsHProp (uses_truncmaps n a)
   := match a with
      | constE A _ => trunc_forall
      | constfunE A B f a => trunc_prod
      | varE _ _ => trunc_succ
      | pairE A B a b => trunc_prod
      end.
-Existing Instance ishprop_uses_embeddings.
+Existing Instance ishprop_uses_truncmaps.
 
 Inductive count := Never | Once | Many.
 
@@ -102,56 +102,56 @@ Fixpoint counts_init (Γ : ctxS) : counts Γ
      | A :: Γ => (Never, counts_init Γ)
      end.
 
-Definition cond_of_count A c :=
+Definition cond_of_count n A c :=
   match c with
-  | Never => IsHProp A
+  | Never => IsTrunc n A
   | Once => Unit
-  | Many => IsHSet A
+  | Many => IsTrunc n.+1 A
   end.
 
-Definition hset_of_count@{i} (A:Type@{i}) c : Type@{i} :=
+Definition local_of_count@{i} n (A:Type@{i}) c : Type@{i} :=
   match c with
-  | Many => IsHSet A
+  | Many => IsTrunc n A
   | Never | Once => Unit
   end.
 
-Fixpoint cond_of_counts {Γ} : counts Γ -> Type :=
+Fixpoint cond_of_counts n {Γ} : counts Γ -> Type :=
   match Γ return counts Γ -> Type with
   | nil => fun _ => Unit
   | A :: Γ =>
-    fun c => cond_of_count A (fst c) * cond_of_counts (snd c)
+    fun c => cond_of_count n A (fst c) * cond_of_counts n (snd c)
   end.
 
-Fixpoint hset_of_counts {Γ} : counts Γ -> Type :=
+Fixpoint local_of_counts n {Γ} : counts Γ -> Type :=
   match Γ return counts Γ -> Type with
   | nil => fun _ => Unit
   | A :: Γ =>
-    fun c => hset_of_count A (fst c) * hset_of_counts (snd c)
+    fun c => local_of_count n A (fst c) * local_of_counts n (snd c)
   end.
 
-Definition hset_unmerge_count {A} c1 c2 (Hcs : hset_of_count A (merge_count c1 c2))
-  : hset_of_count A c1 * hset_of_count A c2.
+Definition local_unmerge_count {n A} c1 c2 (Hcs : local_of_count n A (merge_count c1 c2))
+  : local_of_count n A c1 * local_of_count n A c2.
 Proof.
   destruct c1,c2;simpl in *;auto.
 Qed.
 
-Fixpoint hset_unmerge_counts {Γ} : forall c1 c2 : counts Γ,
-    hset_of_counts (merge_counts c1 c2) ->
-    hset_of_counts c1 * hset_of_counts c2.
+Fixpoint local_unmerge_counts {n Γ} : forall c1 c2 : counts Γ,
+    local_of_counts n (merge_counts c1 c2) ->
+    local_of_counts n c1 * local_of_counts n c2.
 Proof.
   destruct Γ as [|A Γ];simpl;intros c1 c2.
   - intros _;exact (tt,tt).
   - intros [HA HΓ].
-    apply hset_unmerge_counts in HΓ.
-    apply hset_unmerge_count in HA.
+    apply local_unmerge_counts in HΓ.
+    apply local_unmerge_count in HA.
     destruct HA as [HA1 HA2], HΓ as [HΓ1 HΓ2];auto.
 Qed.
 
-Fixpoint cond_implies_hset {Γ} : forall c : counts Γ, cond_of_counts c -> hset_of_counts c.
+Fixpoint cond_implies_local {n Γ} : forall c : counts Γ, cond_of_counts n c -> local_of_counts n.+1 c.
 Proof.
   destruct Γ as [|A Γ];simpl;intros c.
   - intros _; exact tt.
-  - refine (functor_prod _ (cond_implies_hset _ (snd c))).
+  - refine (functor_prod _ (cond_implies_local _ _ (snd c))).
     generalize (fst c);clear c;intros c;destruct c;simpl;auto.
 Qed.
 
@@ -171,8 +171,8 @@ Fixpoint count_expr {Γ A} (a : exprS Γ A) : counts Γ
      | pairE A B a b => merge_counts (count_expr a) (count_expr b)
      end.
 
-Definition global_cond {Γ A} (a : exprS Γ A)
-  := cond_of_counts (count_expr a).
+Definition global_cond n {Γ A} (a : exprS Γ A)
+  := cond_of_counts n (count_expr a).
 
 
 (* expressions describing functions such that we can prove the function is an embedding. *)
@@ -194,24 +194,21 @@ Fixpoint eval_mexpr {A B} (e : mexpr A B) : A -> B
      | mpair A B C D ef eg => functor_prod (eval_mexpr ef) (eval_mexpr eg)
      end.
 
-Fixpoint mcond {A B} (e : mexpr A B) :=
+Fixpoint mcond n {A B} (e : mexpr A B) :=
   match e with
-  | mconst A B x => IsHProp A * forall y, IsHProp (x = y)
+  | mconst A B x => IsTrunc n A * forall y, IsTrunc n (x = y)
   | mid _ => Unit
-  | mapplyl A B C g ef => IsEmbedding g * mcond ef
-  | mapplyr A B C eg f => mcond eg * IsEmbedding f
-  | mpair A B C D ef eg => mcond ef * mcond eg
+  | mapplyl A B C g ef => IsTruncMap n g * mcond n ef
+  | mapplyr A B C eg f => mcond n eg * IsTruncMap n f
+  | mpair A B C D ef eg => mcond n ef * mcond n eg
   end.
 
-Instance isembedding_constant A {B} (x : B) `{!IsHProp A} `{!forall y, IsHProp (x = y)}
-  : IsEmbedding (fun _ : A => x).
-Proof.
-intros y;apply ishprop_sigma_disjoint. intros;apply path_ishprop.
-Qed.
+Instance istruncmap_constant {n} A {B} (x : B) `{!IsTrunc n A} `{!forall y, IsTrunc n (x = y)}
+  : IsTruncMap n (fun _ : A => x) := fun y => _.
 
-Instance isembedding_functor_prod {A B C D} (f : A -> B) (g : C -> D)
-         {fembed : IsEmbedding f} {gembed : IsEmbedding g}
-  : IsEmbedding (functor_prod f g).
+Instance istruncmap_functor_prod {n A B C D} (f : A -> B) (g : C -> D)
+         {fembed : IsTruncMap n f} {gembed : IsTruncMap n g}
+  : IsTruncMap n (functor_prod f g).
 Proof.
   intros [y1 y2].
   unfold hfiber.
@@ -232,11 +229,11 @@ Proof.
     + set (lhs := _ : sig _). apply (path_sigma _ lhs (snd x) idpath).
       simpl;clear lhs.
       apply (@ap_snd_path_prod _ _ (_,_) (_,_)).
-Defined.
+Qed.
 
-Instance isembedding_functor_sigma {A B C D} (f : A -> B) (g : forall x, C x -> D (f x))
-         {fembed : IsEmbedding f} {gembed : forall x, IsEmbedding (g x)}
-  : IsEmbedding (functor_sigma f g).
+Instance istruncmap_functor_sigma {n A B C D} (f : A -> B) (g : forall x, C x -> D (f x))
+         {fembed : IsTruncMap n f} {gembed : forall x, IsTruncMap n (g x)}
+  : IsTruncMap n (functor_sigma f g).
 Proof.
   intros [y1 y2];unfold hfiber.
   srefine (trunc_equiv' {x : hfiber f y1 & hfiber (g x.1) _} _).
@@ -260,17 +257,22 @@ Qed.
 
 Definition dup A (x : A) := (x,x).
 
-Instance isembedding_dup_hset {A} {Aset : IsHSet A} : IsEmbedding (dup A).
+Instance istruncmap_dup {n A} {Atrunc : IsTrunc n.+1 A} : IsTruncMap n (dup A).
 Proof.
   intros [y1 y2].
-  unfold hfiber;simpl. apply ishprop_sigma_disjoint.
-  intros x1 x2 p1 p2.
-  apply (ap fst) in p1;apply (ap fst) in p2;simpl in p1, p2.
-  path_via y1.
+  srefine (trunc_equiv' (y1=y2) _).
+  srefine (equiv_adjointify _ _ _ _).
+  - intros p;exists y1;destruct p;reflexivity.
+  - intros [x p].
+    exact (ap fst p^ @ ap snd p).
+  - intros [x p].
+    revert p;apply (equiv_ind (Prod.path_prod_uncurried _ _));intros [p1 p2].
+    simpl in * |-;destruct p1,p2. reflexivity.
+  - intros p;destruct p. reflexivity.
 Defined.
 
-Instance isembedding_compose {A B C} (g : B -> C) (f : A -> B) `{!IsEmbedding g} `{!IsEmbedding f}
-  : IsEmbedding (g o f).
+Instance istruncmap_compose {n A B C} (g : B -> C) (f : A -> B) `{!IsTruncMap n g} `{!IsTruncMap n f}
+  : IsTruncMap n (g o f).
 Proof.
   intros z.
   refine (trunc_equiv' {y : hfiber g z & hfiber f y.1} _).
@@ -284,33 +286,42 @@ Proof.
     destruct yx as [[y py] [x px]],py;simpl in px;destruct px;reflexivity.
 Qed.
 
-Instance istruncmap_S {n A B} (f : A -> B) {Hf : IsTruncMap n f} : IsTruncMap n.+1 f.
+Instance istruncmap_S {n A B} (f : A -> B) {Hf : IsTruncMap n f} : IsTruncMap n.+1 f := fun y => _.
+
+Instance istruncmap_isequiv {n A B} (f : A -> B) `{!IsEquiv f} : IsTruncMap n f.
 Proof.
-  intros y;apply _.
+  induction n as [|n IHn].
+  - red;apply EquivalenceVarieties.fcontr_isequiv,_.
+  - apply _.
 Qed.
 
-Instance isembedding_isequiv {A B} (f : A -> B) `{!IsEquiv f} : IsEmbedding f.
+Fixpoint mcond_S {n A B} (e : mexpr A B) (He : mcond n e) {struct e} : mcond n.+1 e.
 Proof.
-  apply istruncmap_S. red;apply EquivalenceVarieties.fcontr_isequiv,_.
+  destruct e as [A B x|A|A B C g ef|A B C eg f|A B C D ef eg];simpl in *.
+  - destruct He;split;apply _.
+  - trivial.
+  - destruct He;split;[exact _|auto].
+  - destruct He;split;[auto|exact _].
+  - destruct He;auto.
 Qed.
 
-Fixpoint isembedding_mcond {A B} (e : mexpr A B) : mcond e -> IsEmbedding (eval_mexpr e).
+Fixpoint istruncmap_mcond {n A B} (e : mexpr A B) : mcond n e -> IsTruncMap n (eval_mexpr e).
 Proof.
   destruct e as [A B x|A|A B C g ef|A B C eg f|A B C D ef eg];simpl;intros Hcond.
-  - destruct Hcond as [HA HB];apply isembedding_constant;apply _.
+  - destruct Hcond as [HA HB];apply istruncmap_constant;apply _.
   - apply _.
   - destruct Hcond as [Hg Hf].
-    apply isembedding_compose.
+    apply istruncmap_compose.
     + exact Hg.
-    + exact (isembedding_mcond _ _ _ Hf).
+    + exact (istruncmap_mcond _ _ _ _ Hf).
   - destruct Hcond as [Hg Hf].
-    apply isembedding_compose.
-    + exact (isembedding_mcond _ _ _ Hg).
+    apply istruncmap_compose.
+    + exact (istruncmap_mcond _ _ _ _ Hg).
     + exact Hf.
   - destruct Hcond as [Hf Hg].
-    apply isembedding_functor_prod.
-    + exact (isembedding_mcond _ _ _ Hf).
-    + exact (isembedding_mcond _ _ _ Hg).
+    apply istruncmap_functor_prod.
+    + exact (istruncmap_mcond _ _ _ _ Hf).
+    + exact (istruncmap_mcond _ _ _ _ Hg).
 Qed.
 
 Fixpoint subctx {Γ} : counts Γ -> Type :=
@@ -333,32 +344,38 @@ Proof.
     + exact (functor_prod idmap (subctx_into _ _)).
 Defined.
 
-Lemma isembedding_fst_hprop A B `{!IsHProp B} : IsEmbedding (@fst A B).
+Lemma istruncmap_fst {n} A B `{!IsTrunc n B} : IsTruncMap n (@fst A B).
 Proof.
-  intros x. unfold hfiber. apply hprop_allpath.
-  intros [[x1 y1] p1] [[x2 y2] p2];simpl in *.
-  pose proof (path_ishprop y1 y2) as p3.
-  destruct p1,p2,p3. reflexivity.
+  intros x.
+  refine (trunc_equiv' B _).
+  srefine (equiv_adjointify _ _ _ _).
+  - intros y;exists (x,y). reflexivity.
+  - intros xy;exact (snd (xy.1)).
+  - intros [[x' y] p]. destruct p;reflexivity.
+  - intros y. reflexivity.
 Qed.
 
-Lemma isembedding_snd_hprop A B `{!IsHProp A} : IsEmbedding (@snd A B).
+Lemma istruncmap_snd {n} A B `{!IsTrunc n A} : IsTruncMap n (@snd A B).
 Proof.
-  intros x. unfold hfiber. apply hprop_allpath.
-  intros [[x1 y1] p1] [[x2 y2] p2];simpl in *.
-  pose proof (path_ishprop x1 x2) as p3.
-  destruct p1,p2,p3. reflexivity.
+  intros y.
+  refine (trunc_equiv' A _).
+  srefine (equiv_adjointify _ _ _ _).
+  - intros x;exists (x,y). reflexivity.
+  - intros xy;exact (fst (xy.1)).
+  - intros [[x y'] p]. destruct p;reflexivity.
+  - intros x. reflexivity.
 Qed.
 
-Fixpoint isembedding_subctx_into {Γ} : forall c : counts Γ,
-    cond_of_counts c -> IsEmbedding (subctx_into c).
+Fixpoint istruncmap_subctx_into {n Γ} : forall c : counts Γ,
+    cond_of_counts n c -> IsTruncMap n (subctx_into c).
 Proof.
   destruct Γ as [|A Γ];simpl.
   - intros _ _;apply _.
   - intros [[] c];simpl;intros [HA HΓ].
-    + apply isembedding_compose;[apply isembedding_subctx_into,HΓ|].
-      apply isembedding_snd_hprop,_.
-    + apply isembedding_subctx_into in HΓ. apply isembedding_functor_prod;apply _.
-    + apply isembedding_subctx_into in HΓ. apply isembedding_functor_prod;apply _.
+    + apply istruncmap_compose;[apply istruncmap_subctx_into,HΓ|].
+      apply istruncmap_snd,_.
+    + apply istruncmap_subctx_into in HΓ. apply istruncmap_functor_prod;apply _.
+    + apply istruncmap_subctx_into in HΓ. apply istruncmap_functor_prod;apply _.
 Qed.
 
 Definition merge_aux1 A B C D : A * B * (C * D) -> B * C * (A * D)
@@ -409,20 +426,27 @@ Proof.
   - exact contr_unit.
   - apply init_contr.
 Defined.
-Existing Instance init_contr.
+
+Instance init_trunc {n} Γ : IsTrunc n (subctx (counts_init Γ)).
+Proof.
+  induction n as [|n IHn].
+  - apply init_contr.
+  - apply _.
+Qed.
 
 Opaque functor_prod equiv_prod_assoc equiv_prod_symm merge_aux1 merge_aux2 dup.
 
-Fixpoint isembedding_merge_subctx {Γ} : forall c1 c2 : counts Γ,
-    hset_of_counts (merge_counts c1 c2) ->
-    IsEmbedding (merge_subctx c1 c2).
+Fixpoint istruncmap_merge_subctx {n Γ} : forall c1 c2 : counts Γ,
+    local_of_counts n.+1 (merge_counts c1 c2) ->
+    IsTruncMap n (merge_subctx c1 c2).
 Proof.
   destruct Γ as [|A Γ];simpl.
   - intros _ _ _. apply _.
   - intros [c1 cs1] [c2 cs2] [h hs];simpl in *.
-    apply isembedding_merge_subctx in hs.
+    apply istruncmap_merge_subctx in hs.
     destruct c1,c2;simpl in *;apply _.
 Qed.
+
 Transparent functor_prod equiv_prod_assoc equiv_prod_symm merge_aux1 merge_aux2 dup.
 
 Fixpoint mexpr_var {A Γ} (x : varS A Γ) : mexpr (subctx (counts_of_var x)) A.
@@ -447,27 +471,34 @@ Proof.
     + exact (merge_subctx (count_expr a) (count_expr b)).
 Defined.
 
-Fixpoint mcond_var {A Γ} (x : varS A Γ) : mcond (mexpr_var x).
+Fixpoint mcond_var_base {A Γ} (x : varS A Γ) : mcond (-2) (mexpr_var x).
 Proof.
   destruct x as [Γ|Γ x B];simpl.
   - apply (pair tt).
-    apply isembedding_fst_hprop. exact _.
-  - apply mcond_var.
+    apply istruncmap_fst. exact _.
+  - apply mcond_var_base.
 Qed.
 
-Fixpoint mexpr_preserves_embeddings {Γ A} (e : exprS Γ A)
-  : hset_of_counts (count_expr e) -> uses_embeddings e -> mcond (mexpr_of e).
+Lemma mcond_var {n A Γ} (x : varS A Γ) : mcond n (mexpr_var x).
+Proof.
+  induction n as [|n IHn].
+  - apply mcond_var_base.
+  - apply mcond_S,IHn.
+Qed.
+
+Fixpoint mexpr_preserves_truncmaps {n Γ A} (e : exprS Γ A)
+  : local_of_counts n.+1 (count_expr e) -> uses_truncmaps n e -> mcond n (mexpr_of e).
 Proof.
   destruct e as [A x|A B f a|A x|A B a b];simpl.
   - intros _ HA;split;exact _.
-  - intros H. apply (functor_prod idmap). apply mexpr_preserves_embeddings,H.
+  - intros H. apply (functor_prod idmap). apply mexpr_preserves_truncmaps,H.
   - intros _ _. apply mcond_var.
   - intros HS HE.
     split.
-    + apply hset_unmerge_counts in HS.
-      exact (functor_prod (mexpr_preserves_embeddings _ _ _ (fst HS))
-                          (mexpr_preserves_embeddings _ _ _ (snd HS)) HE).
-    + apply isembedding_merge_subctx. exact HS.
+    + apply local_unmerge_counts in HS.
+      exact (functor_prod (mexpr_preserves_truncmaps _ _ _ _ (fst HS))
+                          (mexpr_preserves_truncmaps _ _ _ _ (snd HS)) HE).
+    + apply istruncmap_merge_subctx. exact HS.
 Qed.
 
 Fixpoint path_mexpr_var {A Γ} (x : varS A Γ) : forall y,
@@ -552,14 +583,14 @@ Proof.
   apply Fibrations.equiv_hfiber_homotopic. exact Heq.
 Defined.
 
-Theorem isembedding_eval_expr {Γ A} (e : exprS Γ A)
-  : global_cond e -> uses_embeddings e -> IsEmbedding (eval_expr e).
+Theorem istruncmap_eval_expr {n Γ A} (e : exprS Γ A)
+  : global_cond n e -> uses_truncmaps n e -> IsTruncMap n (eval_expr e).
 Proof.
   intros H1 H2.
   refine (istruncmap_homotopic _ (path_mexpr_of e)).
-  apply isembedding_compose.
-  - apply isembedding_mcond. apply mexpr_preserves_embeddings.
-    + apply cond_implies_hset,H1.
+  apply istruncmap_compose.
+  - apply istruncmap_mcond. apply mexpr_preserves_truncmaps.
+    + apply cond_implies_local,H1.
     + exact H2.
-  - apply isembedding_subctx_into. exact H1.
+  - apply istruncmap_subctx_into. exact H1.
 Qed.

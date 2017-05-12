@@ -156,8 +156,8 @@ Module Simple.
 
     Local Instance istrunc_IndT' {n} (Hi : IsTruncMap n.+1 (iota S)) : forall i, IsTrunc n.+1 (IndT' i).
     Proof.
-      intros i x y. change IsTrunc_internal with IsTrunc.
-      revert y. induction x as [i x recx IH].
+      intros i x. change IsTrunc_internal with IsTrunc.
+      induction x as [i x recx IH].
       intros y;destruct y as [y recy].
       pose (isequiv := @isequiv_ap _ _ _ (isequiv_IndT'_to_sigInd i)).
       refine (trunc_equiv _ _);[|refine (isequiv_inverse _);apply isequiv];clear isequiv.
@@ -1028,11 +1028,11 @@ Module Abstract.
       (** We could define and show equivalence for the definitions of recursors etc but why bother. *)
     End WithT.
 
-    Fixpoint abstract_condition {Γ} (spec : ConstrS Γ) : Type :=
+    Fixpoint abstract_condition n {Γ} (spec : ConstrS Γ) : Type :=
       match spec with
-      | ConstrUniform A spec => abstract_condition spec
-      | ConstrPositive _ spec => abstract_condition spec
-      | ConstrFinal i => global_cond i * uses_embeddings i
+      | ConstrUniform A spec => abstract_condition n spec
+      | ConstrPositive _ spec => abstract_condition n spec
+      | ConstrFinal i => global_cond n i * uses_truncmaps n i
       end.
 
     Definition compile (spec : ConstrS nil) : Simple.InductiveS index
@@ -1044,32 +1044,32 @@ Module Abstract.
     Definition preiota {Γ} (spec : ConstrS Γ) γ : prenonrec spec γ -> index
       := Compile.iota_of (complex_of spec γ).
 
-    Fixpoint isembedding_preiota {Γ} (spec : ConstrS Γ)
-      : abstract_condition spec -> IsEmbedding (fun γ => preiota spec γ.1 γ.2).
+    Fixpoint istruncmap_preiota {n Γ} (spec : ConstrS Γ)
+      : abstract_condition n spec -> IsTruncMap n (fun γ => preiota spec γ.1 γ.2).
     Proof.
       destruct spec as [A spec|pos spec|i];simpl;intros H.
-      - apply isembedding_preiota in H.
+      - apply istruncmap_preiota in H.
         srefine (istruncmap_full_homotopic _ equiv_idmap _ _ H _).
         + unfold prenonrec;simpl.
           refine (_ oE _);[|symmetry; apply Sigma.equiv_sigma_prod].
           apply Sigma.equiv_sigma_symm.
         + intros x;reflexivity.
-      - apply isembedding_preiota in H. exact H.
+      - apply istruncmap_preiota in H. exact H.
       - unfold prenonrec, preiota;simpl.
         destruct H as [H0 H1].
-        pose proof (isembedding_eval_expr _ H0 H1) as H;clear H0 H1.
+        pose proof (istruncmap_eval_expr _ H0 H1) as H;clear H0 H1.
         srefine (istruncmap_full_homotopic _ equiv_idmap _ _ H _).
         + symmetry; apply Sigma.equiv_sigma_contr.
           exact _.
         + intros x;reflexivity.
     Qed.
 
-    Theorem condition_suffices : forall spec,
-        abstract_condition spec ->
-        forall i, IsHProp (Simple.IndT (compile spec) i).
+    Theorem condition_suffices {n} : forall spec,
+        abstract_condition n.+1 spec ->
+        forall i, IsTrunc n.+1 (Simple.IndT (compile spec) i).
     Proof.
-      intros spec H. apply Simple.criterion_hprop.
-      unfold compile. apply isembedding_preiota in H.
+      intros spec H. apply Simple.istrunc_IndT.
+      unfold compile. apply istruncmap_preiota in H.
       srefine (istruncmap_full_homotopic _ equiv_idmap _ _ H _).
       - unfold prenonrec. simpl.
         exact (@Sigma.equiv_contr_sigma Unit _ _).
