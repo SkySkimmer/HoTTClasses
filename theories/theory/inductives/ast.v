@@ -203,58 +203,6 @@ Fixpoint mcond n {A B} (e : mexpr A B) :=
   | mpair A B C D ef eg => mcond n ef * mcond n eg
   end.
 
-Instance istruncmap_constant {n} A {B} (x : B) `{!IsTrunc n A} `{!forall y, IsTrunc n (x = y)}
-  : IsTruncMap n (fun _ : A => x) := fun y => _.
-
-Instance istruncmap_functor_prod {n A B C D} (f : A -> B) (g : C -> D)
-         {fembed : IsTruncMap n f} {gembed : IsTruncMap n g}
-  : IsTruncMap n (functor_prod f g).
-Proof.
-  intros [y1 y2].
-  unfold hfiber.
-  simple refine (trunc_equiv' ((hfiber f y1) * (hfiber g y2)) _).
-  srefine (BuildEquiv _ _ _ (isequiv_adjointify _ _ _ _)).
-  - intros p. exists ((fst p).1, (snd p).1). simpl.
-    apply path_prod';[exact ((fst p).2)|exact ((snd p).2)].
-  - intros p. split.
-    + exists (fst p.1). exact (ap fst p.2).
-    + exists (snd p.1). exact (ap snd p.2).
-  - intros [[x1 x2] p]. simpl.
-    apply ap. apply eta_path_prod.
-  - intros x;simpl.
-    apply path_prod;simpl.
-    + set (lhs := _ : sig _). apply (path_sigma _ lhs (fst x) idpath).
-      simpl;clear lhs.
-      apply (@ap_fst_path_prod _ _ (_,_) (_,_)).
-    + set (lhs := _ : sig _). apply (path_sigma _ lhs (snd x) idpath).
-      simpl;clear lhs.
-      apply (@ap_snd_path_prod _ _ (_,_) (_,_)).
-Qed.
-
-Instance istruncmap_functor_sigma {n A B C D} (f : A -> B) (g : forall x, C x -> D (f x))
-         {fembed : IsTruncMap n f} {gembed : forall x, IsTruncMap n (g x)}
-  : IsTruncMap n (functor_sigma f g).
-Proof.
-  intros [y1 y2];unfold hfiber.
-  srefine (trunc_equiv' {x : hfiber f y1 & hfiber (g x.1) _} _).
-  { exact (transport _ x.2^ y2). }
-  srefine (equiv_adjointify _ _ _ _).
-  - intros [[x px] [x' px']]. simpl in *.
-    exists (x;x'). unfold functor_sigma;simpl.
-    destruct px;simpl in px';destruct px';reflexivity.
-  - intros [[x x'] p];unfold functor_sigma in p;simpl in *.
-    apply (Sigma.path_sigma_uncurried _ _ _)^-1 in p. destruct p as [px px'].
-    simpl in *.
-    exists (x;px). simpl. exists x'.
-    apply moveL_transport_V. exact px'.
-  - intros [[x x'] p];simpl.
-    revert p;apply (equiv_ind (Sigma.path_sigma_uncurried _ _ _));simpl.
-    intros [px px']. destruct px;simpl in px';destruct px';simpl.
-    reflexivity.
-  - intros [[x px] [x' px']].
-    destruct px;simpl in px';destruct px'. simpl. reflexivity.
-Qed.
-
 Definition dup A (x : A) := (x,x).
 
 Instance istruncmap_dup {n A} {Atrunc : IsTrunc n.+1 A} : IsTruncMap n (dup A).
@@ -270,21 +218,6 @@ Proof.
     simpl in * |-;destruct p1,p2. reflexivity.
   - intros p;destruct p. reflexivity.
 Defined.
-
-Instance istruncmap_compose {n A B C} (g : B -> C) (f : A -> B) `{!IsTruncMap n g} `{!IsTruncMap n f}
-  : IsTruncMap n (g o f).
-Proof.
-  intros z.
-  refine (trunc_equiv' {y : hfiber g z & hfiber f y.1} _).
-  srefine (equiv_adjointify _ _ _ _).
-  - intros yx;exists yx.2.1.
-    path_via (g yx.1.1).
-  - intros x. refine ((f x.1;x.2);(x.1;idpath));simpl.
-  - intros x. simpl. change x with (x.1;x.2) at 6.
-    apply ap,concat_1p.
-  - intros yx.
-    destruct yx as [[y py] [x px]],py;simpl in px;destruct px;reflexivity.
-Qed.
 
 Instance istruncmap_S {n A B} (f : A -> B) {Hf : IsTruncMap n f} : IsTruncMap n.+1 f := fun y => _.
 
@@ -308,18 +241,18 @@ Qed.
 Fixpoint istruncmap_mcond {n A B} (e : mexpr A B) : mcond n e -> IsTruncMap n (eval_mexpr e).
 Proof.
   destruct e as [A B x|A|A B C g ef|A B C eg f|A B C D ef eg];simpl;intros Hcond.
-  - destruct Hcond as [HA HB];apply istruncmap_constant;apply _.
+  - destruct Hcond as [HA HB]. exact _.
   - apply _.
   - destruct Hcond as [Hg Hf].
-    apply istruncmap_compose.
+    apply Fibrations.istruncmap_compose.
     + exact Hg.
     + exact (istruncmap_mcond _ _ _ _ Hf).
   - destruct Hcond as [Hg Hf].
-    apply istruncmap_compose.
+    apply Fibrations.istruncmap_compose.
     + exact (istruncmap_mcond _ _ _ _ Hg).
     + exact Hf.
   - destruct Hcond as [Hf Hg].
-    apply istruncmap_functor_prod.
+    apply Fibrations.istruncmap_functor_prod.
     + exact (istruncmap_mcond _ _ _ _ Hf).
     + exact (istruncmap_mcond _ _ _ _ Hg).
 Qed.
@@ -372,10 +305,10 @@ Proof.
   destruct Γ as [|A Γ];simpl.
   - intros _ _;apply _.
   - intros [[] c];simpl;intros [HA HΓ].
-    + apply istruncmap_compose;[apply istruncmap_subctx_into,HΓ|].
+    + apply Fibrations.istruncmap_compose;[apply istruncmap_subctx_into,HΓ|].
       apply istruncmap_snd,_.
-    + apply istruncmap_subctx_into in HΓ. apply istruncmap_functor_prod;apply _.
-    + apply istruncmap_subctx_into in HΓ. apply istruncmap_functor_prod;apply _.
+    + apply istruncmap_subctx_into in HΓ. exact _.
+    + apply istruncmap_subctx_into in HΓ. exact _.
 Qed.
 
 Definition merge_aux1 A B C D : A * B * (C * D) -> B * C * (A * D)
@@ -588,7 +521,7 @@ Theorem istruncmap_eval_expr {n Γ A} (e : exprS Γ A)
 Proof.
   intros H1 H2.
   refine (istruncmap_homotopic _ (path_mexpr_of e)).
-  apply istruncmap_compose.
+  apply Fibrations.istruncmap_compose.
   - apply istruncmap_mcond. apply mexpr_preserves_truncmaps.
     + apply cond_implies_local,H1.
     + exact H2.
