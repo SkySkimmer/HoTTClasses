@@ -1,16 +1,7 @@
 Require Import HoTT.Basics HoTT.Types.
 Require Import HoTTClasses.theory.jections.
 
-Global Set Automatic Introduction.
-Global Set Automatic Coercions Import.
-Hint Resolve tt : core.
-
-Open Scope list_scope.
-
-Notation " [ ] " := nil (format "[ ]") : list_scope.
-Notation " [ x ] " := (cons x nil) : list_scope.
-Notation " [ x ; y ; .. ; z ] " :=  (cons x (cons y .. (cons z nil) ..))
-  : list_scope.
+Local Open Scope list_scope.
 
 Definition ctxS := list Type.
 Fixpoint eval_ctx (c : ctxS) : Type :=

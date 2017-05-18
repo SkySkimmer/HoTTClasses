@@ -4,12 +4,6 @@ Import HoTT.Types.Bool HoTT.Types.Sum.
 Require Import HoTT.FunextAxiom.
 Require Import HoTTClasses.theory.inductives.ast.
 
-Global Set Automatic Introduction.
-Global Set Automatic Coercions Import.
-Hint Resolve tt : core.
-
-Open Scope list_scope.
-
 (** Acc isn't in HoTT's library *)
 Inductive Acc {A : Type} (R : A -> A -> Type) (x : A) : Type :=
   Acc_in : (forall y, R y x -> Acc R y) -> Acc R x.
@@ -981,6 +975,8 @@ Module Pack.
 End Pack.
 
 Module Syntactic.
+  Local Open Scope list_scope.
+
   Section VarSec.
 
     Context {index : Type}.
