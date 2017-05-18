@@ -66,7 +66,7 @@ Proof.
   srefine (trunc_equiv' _ (equiv_inverse (equiv_sigma_sum _ _ _))).
 Qed.
 
-Module Simple.
+Module Packed.
 
   Record InductiveS (index : Type) :=
     mkIndS { nonrec : Type;
@@ -307,9 +307,9 @@ Module Simple.
       End VarSec.
     End Acc.
   End Examples.
-End Simple.
+End Packed.
 
-Module Complex.
+Module Abstract.
 
   Section VarSec.
 
@@ -685,10 +685,10 @@ Module Complex.
     End Acc.
 
   End Examples.
-End Complex.
+End Abstract.
 
-Module Compile.
-  Import Simple Complex.
+Module Pack.
+  Import Packed Abstract.
   Section VarSec.
 
     Context {index : Type}.
@@ -812,15 +812,15 @@ Module Compile.
       Variables (T : index -> Type) (P : forall i, T i -> Type).
 
 
-      Fixpoint compile_ih spec : forall y, (forall z, P (reciota_of spec z) (y z)) ->
+      Fixpoint pack_ih spec : forall y, (forall z, P (reciota_of spec z) (y z)) ->
                                       induction_hyp_of_pos T P spec (simple_positiveT T spec y).
       Proof.
         destruct spec as [i|A f];simpl;intros y ih.
         - apply ih.
-        - intros a;apply compile_ih. intros z;apply (ih (a;z)).
+        - intros a;apply pack_ih. intros z;apply (ih (a;z)).
       Defined.
 
-      Fixpoint compile_rec_arg (spec : ConstrS index)
+      Fixpoint pack_rec_arg (spec : ConstrS index)
         : forall (c : IndConstrT T _ _ (indreciota_of spec) (iota_of spec))
             (rec : rec_arg T P spec (complex_one_constrT T spec c))
             x y (ih : forall z, P (indreciota_of spec x z) (y z)),
@@ -828,14 +828,14 @@ Module Compile.
       Proof.
         destruct spec as [A f|pos spec|i].
         - intros c rec x y ih.
-          simpl. apply (compile_rec_arg (f x.1) _ (rec x.1)).
+          simpl. apply (pack_rec_arg (f x.1) _ (rec x.1)).
           exact ih.
         - intros c rec x.
           refine (sum_arrow_forall_ind _ _).
           intros [yl yr] ih.
           simpl.
-          pose proof (rec _ (compile_ih pos yl (fun z => ih (inl z)))) as rec';clear rec.
-          pose proof (compile_rec_arg _ _ rec' x yr (fun z => ih (inr z)))
+          pose proof (rec _ (pack_ih pos yl (fun z => ih (inl z)))) as rec';clear rec.
+          pose proof (pack_rec_arg _ _ rec' x yr (fun z => ih (inr z)))
             as compiled;clear rec'.
           simpl in compiled.
           set (C := fun s => T _).
@@ -850,38 +850,38 @@ Module Compile.
       Variable F : forall i x, P i x.
       (*Tactics.path_forall_1_beta.*)
 
-      Fixpoint compile_ih_computes pos
+      Fixpoint pack_ih_computes pos
         : forall p,
           transport (induction_hyp_of_pos T P pos) (simple_complex_positiveT T pos p)
-                    (compile_ih pos (complex_positiveT T pos p)
+                    (pack_ih pos (complex_positiveT T pos p)
                                 (fun z => F _ (complex_positiveT T pos p z))) =
           induction_hyp_from_rec T P F pos p.
       Proof.
         destruct pos as [i|A f];simpl;intros p.
         - reflexivity.
         - apply path_forall;intros a.
-          etransitivity;[|exact (compile_ih_computes (f a) (p a))].
+          etransitivity;[|exact (pack_ih_computes (f a) (p a))].
           set (fp := fun x => simple_positiveT T (f x) (complex_positiveT T (f x) (p x))).
-          set (fc := fun x => compile_ih (f x) (complex_positiveT T (f x) (p x))
+          set (fc := fun x => pack_ih (f x) (complex_positiveT T (f x) (p x))
                                       (fun z => F _ _)).
           etransitivity;[exact (transport_lam _ _ _ _ _ _ _ _)|].
           apply Tactics.path_forall_1_beta.
       Defined.
 
-      Definition compile_ih_computes_sig pos p :=
-        Sigma.path_sigma (induction_hyp_of_pos T P pos) (_;_) (_;_) _ (compile_ih_computes pos p).
+      Definition pack_ih_computes_sig pos p :=
+        Sigma.path_sigma (induction_hyp_of_pos T P pos) (_;_) (_;_) _ (pack_ih_computes pos p).
 
-      Lemma compile_ih_computes_alt pos
+      Lemma pack_ih_computes_alt pos
         : forall (Q : (forall a, T (reciota_of pos a)) -> Type)
             (G : forall (p:sig (induction_hyp_of_pos T P pos)), Q (complex_positiveT _ _ p.1))
             p,
           transport _ (path_forall _ _ (complex_simple_positiveT T pos _))
-                    (G (_; (compile_ih pos _ (fun z => F _ (complex_positiveT T pos p z)))))
+                    (G (_; (pack_ih pos _ (fun z => F _ (complex_positiveT T pos p z)))))
           = (G (_; (induction_hyp_from_rec T P F pos p))).
       Proof.
         intros Q G p.
-        etransitivity;[|exact (apD G (compile_ih_computes_sig pos p))].
-        unfold compile_ih_computes_sig.
+        etransitivity;[|exact (apD G (pack_ih_computes_sig pos p))].
+        unfold pack_ih_computes_sig.
         etransitivity;[|symmetry;refine (apD10 _ _);
                         exact (Sigma.transport_pr1_path_sigma
                                  _ _ (fun p => Q (complex_positiveT T pos p)))].
@@ -910,16 +910,16 @@ Module Compile.
           symmetry. exact (ap_path_forall _ _ _ _ (fun x p y => cpos x p y) x y _ _ cpos_e).
       Qed.
 
-      Fixpoint compile_computes_at spec
-        : forall c rec, (forall x y, F _ (c x y) = compile_rec_arg spec c rec x y (fun z => F _ (y z))) ->
+      Fixpoint pack_computes_at spec
+        : forall c rec, (forall x y, F _ (c x y) = pack_rec_arg spec c rec x y (fun z => F _ (y z))) ->
                    computes_at T P F spec (complex_one_constrT T spec c) rec.
       Proof.
         destruct spec as [A f|pos spec|i].
         - intros c rec hf a.
-          apply compile_computes_at.
+          apply pack_computes_at.
           intros x y. apply (hf (a;x)).
         - intros c rec hf p.
-          apply compile_computes_at.
+          apply pack_computes_at.
           intros x y.
           etransitivity. apply hf.
           etransitivity.
@@ -931,10 +931,10 @@ Module Compile.
             set (f' := (_,_)).
             eapply ap10. exact (@equiv_ind_comp _ _ (@sum_ind_uncurried _ _ C) _ _ _ f'). }
           simpl. set (TP := fun yl => P _ _).
-          apply (compile_ih_computes_alt
+          apply (pack_ih_computes_alt
                    pos TP
                    (fun pih =>
-                      compile_rec_arg
+                      pack_rec_arg
                         spec _
                         (rec pih.1 pih.2) x y
                         _)).
@@ -950,37 +950,37 @@ Module Compile.
 
     End WithP.
 
-    Definition compile_recursor (spec : ConstrS index)
+    Definition pack_recursor (spec : ConstrS index)
       : recursor (complex_constrT spec).
     Proof.
       intros P rec. apply IndT_rect.
       simpl.
-      apply compile_rec_arg. exact rec.
+      apply pack_rec_arg. exact rec.
     Defined.
 
-    Lemma compile_is_recursor spec : is_recursor (compile_recursor spec).
+    Lemma pack_is_recursor spec : is_recursor (pack_recursor spec).
     Proof.
-      intros P rec. unfold compile_recursor.
+      intros P rec. unfold pack_recursor.
       set (F := IndT_rect _ _ _).
-      set (rec' := compile_rec_arg _ _ _ _ _) in F.
+      set (rec' := pack_rec_arg _ _ _ _ _) in F.
       unfold complex_constrT.
       set (c := IndC _).
       pose (f := fun x y => F _ (c x y)).
-      simpl in f. apply compile_computes_at.
+      simpl in f. apply pack_computes_at.
       reflexivity.
     Qed.
 
-    Definition compile_is_ind spec := Build_IsInductive (compile_is_recursor spec).
+    Definition pack_is_ind spec := Build_IsInductive (pack_is_recursor spec).
 
-    Definition compile_equiv T spec (Tind : IsInductive T spec)
+    Definition pack_equiv T spec (Tind : IsInductive T spec)
       : forall i, IndT (of_constrS spec) i <~> T i
-      := inductive_default_equiv (compile_is_ind spec) Tind.
+      := inductive_default_equiv (pack_is_ind spec) Tind.
 
   End VarSec.
 
-End Compile.
+End Pack.
 
-Module Abstract.
+Module Syntactic.
   Section VarSec.
 
     Context {index : Type}.
@@ -988,18 +988,18 @@ Module Abstract.
     (* A constructor. *)
     Inductive ConstrS (Γ : ctxS) : Type :=
     | ConstrUniform : forall A, ConstrS (A :: Γ) -> ConstrS Γ
-    | ConstrPositive : (eval_ctx Γ -> Complex.PositiveS index) -> ConstrS Γ -> ConstrS Γ
+    | ConstrPositive : (eval_ctx Γ -> Abstract.PositiveS index) -> ConstrS Γ -> ConstrS Γ
     | ConstrFinal : exprS Γ index -> ConstrS Γ
     .
 
-    Fixpoint complex_of {Γ} (spec : ConstrS Γ) : eval_ctx Γ -> Complex.ConstrS index
+    Fixpoint complex_of {Γ} (spec : ConstrS Γ) : eval_ctx Γ -> Abstract.ConstrS index
       := match spec with
          | ConstrUniform A f =>
-           fun a => Complex.ConstrUniform A (fun b => complex_of f (b, a))
+           fun a => Abstract.ConstrUniform A (fun b => complex_of f (b, a))
          | ConstrPositive pos spec =>
-           fun a => Complex.ConstrPositive (pos a) (complex_of spec a)
+           fun a => Abstract.ConstrPositive (pos a) (complex_of spec a)
          | ConstrFinal i =>
-           fun a => Complex.ConstrFinal (eval_expr i a)
+           fun a => Abstract.ConstrFinal (eval_expr i a)
          end.
 
     Section WithT.
@@ -1010,13 +1010,13 @@ Module Abstract.
            | ConstrUniform A f =>
              fun a => forall x : A, constrT f (x,a)
            | ConstrPositive pos spec =>
-             fun a => (Complex.positiveT T (pos a)) -> constrT spec a
+             fun a => (Abstract.positiveT T (pos a)) -> constrT spec a
            | ConstrFinal i =>
              fun a => T (eval_expr i a)
            end.
 
       Lemma constrT_ok : forall Γ (spec : ConstrS Γ) a,
-          constrT spec a = Complex.constrT T (complex_of spec a).
+          constrT spec a = Abstract.constrT T (complex_of spec a).
       Proof.
         intros Γ spec a;induction spec as [Γ A f IHf | Γ pos spec IH | Γ i];simpl.
         - apply (ap (fun g => forall x, g x)),path_forall;intros b.
@@ -1028,24 +1028,24 @@ Module Abstract.
       (** We could define and show equivalence for the definitions of recursors etc but why bother. *)
     End WithT.
 
-    Fixpoint abstract_condition n {Γ} (spec : ConstrS Γ) : Type :=
+    Fixpoint syntactic_condition n {Γ} (spec : ConstrS Γ) : Type :=
       match spec with
-      | ConstrUniform A spec => abstract_condition n spec
-      | ConstrPositive _ spec => abstract_condition n spec
+      | ConstrUniform A spec => syntactic_condition n spec
+      | ConstrPositive _ spec => syntactic_condition n spec
       | ConstrFinal i => global_cond n i * uses_truncmaps n i
       end.
 
-    Definition compile (spec : ConstrS nil) : Simple.InductiveS index
-      := Compile.of_constrS (complex_of spec tt).
+    Definition pack (spec : ConstrS nil) : Packed.InductiveS index
+      := Pack.of_constrS (complex_of spec tt).
 
     Definition prenonrec {Γ} (spec : ConstrS Γ) γ
-      := Compile.nonrec_of (complex_of spec γ).
+      := Pack.nonrec_of (complex_of spec γ).
 
     Definition preiota {Γ} (spec : ConstrS Γ) γ : prenonrec spec γ -> index
-      := Compile.iota_of (complex_of spec γ).
+      := Pack.iota_of (complex_of spec γ).
 
     Fixpoint istruncmap_preiota {n Γ} (spec : ConstrS Γ)
-      : abstract_condition n spec -> IsTruncMap n (fun γ => preiota spec γ.1 γ.2).
+      : syntactic_condition n spec -> IsTruncMap n (fun γ => preiota spec γ.1 γ.2).
     Proof.
       destruct spec as [A spec|pos spec|i];simpl;intros H.
       - apply istruncmap_preiota in H.
@@ -1065,11 +1065,11 @@ Module Abstract.
     Qed.
 
     Theorem condition_suffices {n} : forall spec,
-        abstract_condition n.+1 spec ->
-        forall i, IsTrunc n.+1 (Simple.IndT (compile spec) i).
+        syntactic_condition n.+1 spec ->
+        forall i, IsTrunc n.+1 (Packed.IndT (pack spec) i).
     Proof.
-      intros spec H. apply Simple.istrunc_IndT.
-      unfold compile. apply istruncmap_preiota in H.
+      intros spec H. apply Packed.istrunc_IndT.
+      unfold pack. apply istruncmap_preiota in H.
       srefine (istruncmap_full_homotopic _ equiv_idmap _ _ H _).
       - unfold prenonrec. simpl.
         exact (@Sigma.equiv_contr_sigma Unit _ _).
@@ -1087,7 +1087,7 @@ Module Abstract.
         := ConstrFinal _ (constE _ Unit tt).
 
       Definition natS : ConstrS Unit nil
-        := ConstrPositive _ (fun _ => Complex.PositiveFinal tt) (ConstrFinal _ (constE _ Unit tt)).
+        := ConstrPositive _ (fun _ => Abstract.PositiveFinal tt) (ConstrFinal _ (constE _ Unit tt)).
 
       (* TODO multiple constructors *)
     End Nat.
@@ -1103,13 +1103,13 @@ Module Abstract.
         Proof.
           intros b. srefine (@trunc_equiv'
                                _ _
-                               (Compile.compile_equiv
+                               (Pack.pack_equiv
                                   _ _
-                                  (Complex.Examples.Path.path_is_ind A a) b) _ _).
+                                  (Abstract.Examples.Path.path_is_ind A a) b) _ _).
           revert b.
-          set (spec := _ : Complex.ConstrS _).
+          set (spec := _ : Abstract.ConstrS _).
           change spec with (complex_of pathS tt);clear spec.
-          apply Abstract.condition_suffices.
+          apply condition_suffices.
           simpl. unfold global_cond;simpl. apply (pair tt).
           exact (Aset a). (* ← lol *)
         Qed.
@@ -1118,4 +1118,4 @@ Module Abstract.
 
   End Examples.
 
-End Abstract.
+End Syntactic.
