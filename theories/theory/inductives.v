@@ -60,6 +60,13 @@ Proof.
   srefine (trunc_equiv' _ (equiv_inverse (equiv_sigma_sum _ _ _))).
 Qed.
 
+Module WType.
+
+  Inductive WType (A : Type) (B : A -> Type)
+    := WC : forall x, (B x -> WType A B) -> WType A B.
+
+End WType.
+
 Module Packed.
 
   Record InductiveS (index : Type) :=
