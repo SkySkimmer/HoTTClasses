@@ -23,6 +23,12 @@ Proof.
   destruct e;reflexivity.
 Qed.
 
+Lemma transport_apD10 {A B} (f g : A -> B) (p : f = g) P x v
+  : transport (fun h => P (h x)) p v = transport P (apD10 p x) v.
+Proof.
+  destruct p;reflexivity.
+Qed.
+
 Lemma ap_path_forall_sig A (P:A->Type) C (T:A->Type) (k:(forall x, T x) -> forall x (y:P x), C x y) f g e x y
   : apD10 (ap (fun f (x:sig P) => k f x.1 x.2) (path_forall f g e)) (x;y) =
     ap (fun f => k f x y) (path_forall f g e).
@@ -66,6 +72,150 @@ Module WType.
     := WC : forall x, (B x -> WType A B) -> WType A B.
 
 End WType.
+
+Module NonUniform.
+  Import WType.
+
+  Record Spec (index : Type) :=
+    mk { nonrec : index -> Type;
+         recdomain : forall i, nonrec i -> Type;
+         reciota : forall i x, recdomain i x -> index }.
+
+  Arguments mk {index} nonrec recdomain reciota.
+  Arguments nonrec {index} _ _.
+  Arguments recdomain {index} _ _ _.
+  Arguments reciota {index} _ _ _ _.
+
+  Section WithS.
+    Context {index : Type}.
+    Variable (S : Spec index).
+
+    Inductive IndT (i : index) :=
+      IndC : forall x : nonrec S i,
+        (forall y : recdomain S i x, IndT (reciota S i x y)) ->
+        IndT i.
+
+    Definition Base := WType {i : index & nonrec S i} (fun ix => recdomain S ix.1 ix.2).
+
+    Definition Base_index (b : Base) : index.
+    Proof.
+      destruct b as [nr r].
+      exact nr.1.
+    Defined.
+
+    Fixpoint Base_ok (b : Base) (i : index) {struct b} : Type.
+    Proof.
+      destruct b as [nr r].
+      refine {p : nr.1 = i & _}.
+      exact (forall y, Base_ok (r y) (reciota S _ nr.2 y)).
+    Defined.
+
+    Definition Alt i := {b : Base & Base_ok b i}.
+
+    Fixpoint Base_ok_to (b : Base) (i : index) (OK : Base_ok b i) {struct b} : IndT i.
+    Proof.
+      destruct b as [nr r].
+      simpl in OK.
+      pose proof (fun y => Base_ok_to (r y)) as call;clear Base_ok_to.
+      destruct OK as [p OK]. destruct p.
+      refine (IndC _ nr.2 _).
+      intros y. apply (call y).
+      apply OK.
+    Defined.
+
+    Definition Alt_to i (b : Alt i) : IndT i := Base_ok_to b.1 i b.2.
+
+    Fixpoint Base_of i (b : IndT i) : Base.
+    Proof.
+      destruct b as [nr r].
+      refine (WC _ _ (i;nr) _);simpl.
+      intros y;exact (Base_of _ (r y)).
+    Defined.
+
+    Fixpoint Base_ok_of i (b : IndT i) : Base_ok (Base_of i b) i.
+    Proof.
+      destruct b as [nr r];simpl.
+      exists idpath.
+      intros y;apply Base_ok_of.
+    Defined.
+
+    Definition Alt_of i (b : IndT i) : Alt i := (Base_of i b; Base_ok_of i b).
+
+    Fixpoint Base_of_Base_ok_to i (b : Base) (OK : Base_ok b i) {struct b}
+      : Base_of i (Base_ok_to b i OK) = b.
+    Proof.
+      destruct b as [nr r].
+      simpl in OK. simpl. destruct OK as [p OK]. destruct p.
+      simpl. apply ap,path_forall. intro y.
+      apply Base_of_Base_ok_to.
+    Defined.
+
+    Fixpoint Base_ok_of_Base_ok_to i (b : Base) (OK : Base_ok b i) {struct b}
+      : transport (fun b' => Base_ok b' i) (Base_of_Base_ok_to i b OK)
+                  (Base_ok_of i (Base_ok_to b i OK))
+        = OK.
+    Proof.
+      destruct b as [nr r].
+      simpl in OK. destruct OK as [p OK];destruct p.
+      simpl.
+      pose proof (fun y => Base_ok_of_Base_ok_to _ _ (OK y)) as call;clear Base_ok_of_Base_ok_to.
+      set (call0 y := Base_of_Base_ok_to _ (r y) (OK y)).
+      change (forall y, transport (fun b' => Base_ok b' (reciota S nr.1 nr.2 y))
+                             (call0 y)
+                             (Base_ok_of (reciota S nr.1 nr.2 y) (Base_ok_to (r y) (reciota S nr.1 nr.2 y) (OK y))) =
+                   OK y) in call.
+      clearbody call0.
+      change (pointwise_paths
+                (fun y =>
+                   Base_of (reciota S nr.1 nr.2 y)
+                           (Base_ok_to (r y) (reciota S nr.1 nr.2 y) (OK y)))
+                r)
+        in call0.
+      set (r' := fun y => Base_of _ _) in call0. fold r'.
+      revert call0 call.
+      refine (equiv_ind apD10 _ _).
+      intros p call.
+      rewrite Forall.eta_path_forall.
+      rewrite <-transport_compose. simpl.
+      rewrite Sigma.transport_sigma'. simpl.
+      apply ap.
+      apply path_forall;intro y.
+      rewrite transport_lam.
+      etransitivity;[clear call|apply call].
+      set (v := Base_ok_of _ _).
+      clearbody v. change (Base_ok (r' y) (reciota S nr.1 nr.2 y)) in v.
+      rewrite <-(transport_apD10 _ _ p).
+      reflexivity.
+    Qed.
+
+    Lemma Alt_of_to i (b : Alt i) : Alt_of i (Alt_to i b) = b.
+    Proof.
+      destruct b as [b OK].
+      srefine (Sigma.path_sigma _ _ _ _ _).
+      - apply Base_of_Base_ok_to.
+      - apply Base_ok_of_Base_ok_to.
+    Qed.
+
+    Fixpoint Alt_to_of i (b : IndT i) {struct b}
+      : Alt_to i (Alt_of i b) = b.
+    Proof.
+      unfold Alt_of, Alt_to in *;simpl in *.
+      destruct b as [nr r].
+      simpl.
+      apply ap,path_forall. intro y.
+      apply Alt_to_of.
+    Qed.
+
+    (* Make this an instance to use it. *)
+    Definition isequiv_Alt_of i : IsEquiv (Alt_of i).
+    Proof.
+      srefine (isequiv_adjointify _ (Alt_to i) _ _).
+      - exact (Alt_of_to i).
+      - exact (Alt_to_of i).
+    Defined.
+
+  End WithS.
+End NonUniform.
 
 Module Packed.
 
