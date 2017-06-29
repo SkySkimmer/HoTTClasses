@@ -214,6 +214,44 @@ Module NonUniform.
       - exact (Alt_to_of i).
     Defined.
 
+    Definition AltC : forall i (x : nonrec S i),
+        (forall y : recdomain S i x, Alt (reciota S i x y)) ->
+        Alt i.
+    Proof.
+      intros i nr r.
+      srefine (_;_).
+      - exact (WC _ _ (i;nr) (fun y => (r y).1)).
+      - simpl. exists idpath.
+        intros y;exact (r y).2.
+    Defined.
+
+    Section Recurse.
+      Variables (P : forall i : index, Alt i -> Type)
+                (F : forall (i : index) (x : nonrec S i)
+                       (i0 : forall y : recdomain S i x, Alt (reciota S i x y)),
+                    (forall y : recdomain S i x, P (reciota S i x y) (i0 y)) -> P i (AltC i x i0)).
+
+      Fixpoint Base_ok_rect i (b : Base) (OK : Base_ok b i) {struct b}
+        : P i (b;OK).
+      Proof.
+        destruct b as [nr r].
+        simpl in *.
+        destruct OK as [p OK];destruct p.
+        change (P nr.1 (AltC nr.1 nr.2 (fun y => (r y; OK y)))).
+        apply F.
+        intros y.
+        apply Base_ok_rect.
+      Defined.
+
+      Definition Alt_rect i (b : Alt i) : P i b := Base_ok_rect i b.1 b.2.
+
+      Definition Alt_rect_compute i nr r
+        : Alt_rect _ (AltC i nr r) =
+          F _ _ _ (fun y => Alt_rect _ (r y))
+        := idpath.
+
+    End Recurse.
+
   End WithS.
 End NonUniform.
 
