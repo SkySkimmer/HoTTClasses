@@ -112,108 +112,6 @@ Module NonUniform.
 
     Definition Alt i := {b : Base & Base_ok b i}.
 
-    Fixpoint Base_ok_to (b : Base) (i : index) (OK : Base_ok b i) {struct b} : IndT i.
-    Proof.
-      destruct b as [nr r].
-      simpl in OK.
-      pose proof (fun y => Base_ok_to (r y)) as call;clear Base_ok_to.
-      destruct OK as [p OK]. destruct p.
-      refine (IndC _ nr.2 _).
-      intros y. apply (call y).
-      apply OK.
-    Defined.
-
-    Definition Alt_to i (b : Alt i) : IndT i := Base_ok_to b.1 i b.2.
-
-    Fixpoint Base_of i (b : IndT i) : Base.
-    Proof.
-      destruct b as [nr r].
-      refine (WC _ _ (i;nr) _);simpl.
-      intros y;exact (Base_of _ (r y)).
-    Defined.
-
-    Fixpoint Base_ok_of i (b : IndT i) : Base_ok (Base_of i b) i.
-    Proof.
-      destruct b as [nr r];simpl.
-      exists idpath.
-      intros y;apply Base_ok_of.
-    Defined.
-
-    Definition Alt_of i (b : IndT i) : Alt i := (Base_of i b; Base_ok_of i b).
-
-    Fixpoint Base_of_Base_ok_to i (b : Base) (OK : Base_ok b i) {struct b}
-      : Base_of i (Base_ok_to b i OK) = b.
-    Proof.
-      destruct b as [nr r].
-      simpl in OK. simpl. destruct OK as [p OK]. destruct p.
-      simpl. apply ap,path_forall. intro y.
-      apply Base_of_Base_ok_to.
-    Defined.
-
-    Fixpoint Base_ok_of_Base_ok_to i (b : Base) (OK : Base_ok b i) {struct b}
-      : transport (fun b' => Base_ok b' i) (Base_of_Base_ok_to i b OK)
-                  (Base_ok_of i (Base_ok_to b i OK))
-        = OK.
-    Proof.
-      destruct b as [nr r].
-      simpl in OK. destruct OK as [p OK];destruct p.
-      simpl.
-      pose proof (fun y => Base_ok_of_Base_ok_to _ _ (OK y)) as call;clear Base_ok_of_Base_ok_to.
-      set (call0 y := Base_of_Base_ok_to _ (r y) (OK y)).
-      change (forall y, transport (fun b' => Base_ok b' (reciota S nr.1 nr.2 y))
-                             (call0 y)
-                             (Base_ok_of (reciota S nr.1 nr.2 y) (Base_ok_to (r y) (reciota S nr.1 nr.2 y) (OK y))) =
-                   OK y) in call.
-      clearbody call0.
-      change (pointwise_paths
-                (fun y =>
-                   Base_of (reciota S nr.1 nr.2 y)
-                           (Base_ok_to (r y) (reciota S nr.1 nr.2 y) (OK y)))
-                r)
-        in call0.
-      set (r' := fun y => Base_of _ _) in call0. fold r'.
-      revert call0 call.
-      refine (equiv_ind apD10 _ _).
-      intros p call.
-      rewrite Forall.eta_path_forall.
-      rewrite <-transport_compose. simpl.
-      rewrite Sigma.transport_sigma'. simpl.
-      apply ap.
-      apply path_forall;intro y.
-      rewrite transport_lam.
-      etransitivity;[clear call|apply call].
-      set (v := Base_ok_of _ _).
-      clearbody v. change (Base_ok (r' y) (reciota S nr.1 nr.2 y)) in v.
-      rewrite <-(transport_apD10 _ _ p).
-      reflexivity.
-    Qed.
-
-    Lemma Alt_of_to i (b : Alt i) : Alt_of i (Alt_to i b) = b.
-    Proof.
-      destruct b as [b OK].
-      srefine (Sigma.path_sigma _ _ _ _ _).
-      - apply Base_of_Base_ok_to.
-      - apply Base_ok_of_Base_ok_to.
-    Qed.
-
-    Fixpoint Alt_to_of i (b : IndT i) {struct b}
-      : Alt_to i (Alt_of i b) = b.
-    Proof.
-      unfold Alt_of, Alt_to in *;simpl in *.
-      destruct b as [nr r].
-      simpl.
-      apply ap,path_forall. intro y.
-      apply Alt_to_of.
-    Qed.
-
-    (* Make this an instance to use it. *)
-    Definition isequiv_Alt_of i : IsEquiv (Alt_of i).
-    Proof.
-      srefine (isequiv_adjointify _ (Alt_to i) _ _).
-      - exact (Alt_of_to i).
-      - exact (Alt_to_of i).
-    Defined.
-
     Definition AltC : forall i (x : nonrec S i),
         (forall y : recdomain S i x, Alt (reciota S i x y)) ->
         Alt i.
@@ -251,6 +149,44 @@ Module NonUniform.
         := idpath.
 
     End Recurse.
+
+    Definition Alt_to : forall i, Alt i -> IndT i.
+    Proof.
+      apply Alt_rect. intros i nr _ r.
+      exact (IndC i nr r).
+    Defined.
+
+    Fixpoint Alt_of i (b : IndT i) : Alt i.
+    Proof.
+      destruct b as [nr r].
+      exact (AltC i nr (fun y => Alt_of _ (r y))).
+    Defined.
+
+    Lemma Alt_of_to : forall i (b : Alt i), Alt_of i (Alt_to i b) = b.
+    Proof.
+      apply Alt_rect.
+      intros i nr r call.
+      simpl. apply ap,path_forall. intro y.
+      apply call.
+    Qed.
+
+    Fixpoint Alt_to_of i (b : IndT i) {struct b}
+      : Alt_to i (Alt_of i b) = b.
+    Proof.
+      unfold Alt_to in *;simpl in *.
+      destruct b as [nr r].
+      simpl. unfold AltC,Alt_rect;simpl.
+      apply ap,path_forall. intro y.
+      apply Alt_to_of.
+    Qed.
+
+    (* Make this an instance to use it. *)
+    Definition isequiv_Alt_of i : IsEquiv (Alt_of i).
+    Proof.
+      srefine (isequiv_adjointify _ (Alt_to i) _ _).
+      - exact (Alt_of_to i).
+      - exact (Alt_to_of i).
+    Defined.
 
   End WithS.
 End NonUniform.
