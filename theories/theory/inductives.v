@@ -73,125 +73,8 @@ Module WType.
 
 End WType.
 
-Module NonUniform.
-  Import WType.
-
-  Record Spec (index : Type) :=
-    mk { nonrec : index -> Type;
-         recdomain : forall i, nonrec i -> Type;
-         reciota : forall i x, recdomain i x -> index }.
-
-  Arguments mk {index} nonrec recdomain reciota.
-  Arguments nonrec {index} _ _.
-  Arguments recdomain {index} _ _ _.
-  Arguments reciota {index} _ _ _ _.
-
-  Section WithS.
-    Context {index : Type}.
-    Variable (S : Spec index).
-
-    Inductive IndT (i : index) :=
-      IndC : forall x : nonrec S i,
-        (forall y : recdomain S i x, IndT (reciota S i x y)) ->
-        IndT i.
-
-    Definition Base := WType {i : index & nonrec S i} (fun ix => recdomain S ix.1 ix.2).
-
-    Definition Base_index (b : Base) : index.
-    Proof.
-      destruct b as [nr r].
-      exact nr.1.
-    Defined.
-
-    Fixpoint Base_ok (b : Base) (i : index) {struct b} : Type.
-    Proof.
-      destruct b as [nr r].
-      refine {p : nr.1 = i & _}.
-      exact (forall y, Base_ok (r y) (reciota S _ nr.2 y)).
-    Defined.
-
-    Definition Alt i := {b : Base & Base_ok b i}.
-
-    Definition AltC : forall i (x : nonrec S i),
-        (forall y : recdomain S i x, Alt (reciota S i x y)) ->
-        Alt i.
-    Proof.
-      intros i nr r.
-      srefine (_;_).
-      - exact (WC _ _ (i;nr) (fun y => (r y).1)).
-      - simpl. exists idpath.
-        intros y;exact (r y).2.
-    Defined.
-
-    Section Recurse.
-      Variables (P : forall i : index, Alt i -> Type)
-                (F : forall (i : index) (x : nonrec S i)
-                       (i0 : forall y : recdomain S i x, Alt (reciota S i x y)),
-                    (forall y : recdomain S i x, P (reciota S i x y) (i0 y)) -> P i (AltC i x i0)).
-
-      Fixpoint Base_ok_rect i (b : Base) (OK : Base_ok b i) {struct b}
-        : P i (b;OK).
-      Proof.
-        destruct b as [nr r].
-        simpl in *.
-        destruct OK as [p OK];destruct p.
-        change (P nr.1 (AltC nr.1 nr.2 (fun y => (r y; OK y)))).
-        apply F.
-        intros y.
-        apply Base_ok_rect.
-      Defined.
-
-      Definition Alt_rect i (b : Alt i) : P i b := Base_ok_rect i b.1 b.2.
-
-      Definition Alt_rect_compute i nr r
-        : Alt_rect _ (AltC i nr r) =
-          F _ _ _ (fun y => Alt_rect _ (r y))
-        := idpath.
-
-    End Recurse.
-
-    Definition Alt_to : forall i, Alt i -> IndT i.
-    Proof.
-      apply Alt_rect. intros i nr _ r.
-      exact (IndC i nr r).
-    Defined.
-
-    Fixpoint Alt_of i (b : IndT i) : Alt i.
-    Proof.
-      destruct b as [nr r].
-      exact (AltC i nr (fun y => Alt_of _ (r y))).
-    Defined.
-
-    Lemma Alt_of_to : forall i (b : Alt i), Alt_of i (Alt_to i b) = b.
-    Proof.
-      apply Alt_rect.
-      intros i nr r call.
-      simpl. apply ap,path_forall. intro y.
-      apply call.
-    Qed.
-
-    Fixpoint Alt_to_of i (b : IndT i) {struct b}
-      : Alt_to i (Alt_of i b) = b.
-    Proof.
-      unfold Alt_to in *;simpl in *.
-      destruct b as [nr r].
-      simpl. unfold AltC,Alt_rect;simpl.
-      apply ap,path_forall. intro y.
-      apply Alt_to_of.
-    Qed.
-
-    (* Make this an instance to use it. *)
-    Definition isequiv_Alt_of i : IsEquiv (Alt_of i).
-    Proof.
-      srefine (isequiv_adjointify _ (Alt_to i) _ _).
-      - exact (Alt_of_to i).
-      - exact (Alt_to_of i).
-    Defined.
-
-  End WithS.
-End NonUniform.
-
 Module Packed.
+  Import WType.
 
   Record InductiveS (index : Type) :=
     mkIndS { nonrec : Type;
@@ -384,6 +267,94 @@ Module Packed.
     Proof.
       srefine (Sigma.functor_sigma (iota S) _). simpl.
       intros a. apply Prod.functor_prod;exact (IndC a).
+    Defined.
+
+    (** Equivalence with W-types + identity + sigma *)
+    (** Given W-types, an identity type for [index] and sigma types,
+        for every [S : InductiveS index] we can construct a type
+        family [WInd] with constructor [WIndC], eliminator [WInd_rect]
+        and judgmental computation rule [WInd_rect_compute ≡ idpath]
+        for the eliminator which respect the specification.
+
+        From this if we define [IndT] as above it is easy to show
+        equivalence with [WInd]. Note however that the definitions
+        about [WInd] do not depend on the existence of [IndT] i.e. do
+        not depend on the existence of general inductive families. *)
+    Definition WBase := WType (nonrec S) (indrecdomain S).
+
+    Fixpoint WCond (i:index) (b : WBase) {struct b} : Type.
+    Proof.
+      destruct b as [nr r].
+      exact (prod (iota S nr = i) (forall y, WCond (indreciota S nr y) (r y))).
+    Defined.
+
+    Definition WInd i := {b : WBase & WCond i b}.
+
+    Definition WIndC (nr : nonrec S) (r : forall y, WInd (indreciota S nr y))
+      : WInd (iota S nr).
+    Proof.
+      srefine (WC _ _ nr (fun y => (r y).1);_);simpl.
+      split;[reflexivity|].
+      intros y;exact (r y).2.
+    Defined.
+
+    Section WRecurse.
+      Variables (P : forall i : index, WInd i -> Type)
+                (F : forall (nr : nonrec S) (r : forall y, WInd (indreciota S nr y)),
+                    (forall y, P (indreciota S nr y) (r y)) -> P (iota S nr) (WIndC nr r)).
+
+      Fixpoint WCond_rect i (b : WBase) (c : WCond i b) {struct b}
+        : P i (b;c).
+      Proof.
+        destruct b as [nr r].
+        simpl in c. destruct c as [p rc];destruct p.
+        change (P (iota S nr) (WIndC nr (fun y => (r y; rc y)))).
+        apply F.
+        intros y;apply WCond_rect.
+      Defined.
+
+      Definition WInd_rect i (x : WInd i) : P i x
+        := WCond_rect i x.1 x.2.
+
+      Definition WInd_rect_compute nr r
+        : WInd_rect _ (WIndC nr r) = F nr r (fun y => WInd_rect _ (r y))
+        := idpath.
+
+    End WRecurse.
+
+    Definition WInd_to_IndT : forall i, WInd i -> IndT i.
+    Proof.
+      apply WInd_rect. intros nr _ r.
+      exact (IndC nr r).
+    Defined.
+
+    Fixpoint IndT_to_WInd i (x : IndT i) : WInd i.
+    Proof.
+      destruct x as [nr r].
+      exact (WIndC nr (fun y => (IndT_to_WInd _ (r y)))).
+    Defined.
+
+    Lemma isretr_IndT_to_WInd : forall i, Sect (WInd_to_IndT i) (IndT_to_WInd i).
+    Proof.
+      red. apply WInd_rect. intros nr r IH.
+      simpl. apply ap,path_forall. intro y.
+      apply IH.
+    Qed.
+
+    Lemma issect_IndT_to_WInd : forall i, Sect (IndT_to_WInd i) (WInd_to_IndT i).
+    Proof.
+      red. fix issect_IndT_to_WInd 2. intros i x.
+      destruct x as [nr r]. simpl.
+      unfold WInd_to_IndT. rewrite WInd_rect_compute.
+      apply ap,path_forall. intro y.
+      apply issect_IndT_to_WInd.
+    Qed.
+
+    Definition isequiv_IndT_to_WInd i : IsEquiv (IndT_to_WInd i).
+    Proof.
+      refine (isequiv_adjointify _ (WInd_to_IndT i) _ _).
+      - exact (isretr_IndT_to_WInd i).
+      - exact (issect_IndT_to_WInd i).
     Defined.
 
   End WithS.
