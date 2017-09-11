@@ -71,7 +71,17 @@ rewrite <-(simple_associativity (f:=join) (' e1)),(idempotency join (' e2)).
 reflexivity.
 Qed.
 
-Instance pos_back_issurj : IsSurjection pos_back.
+Lemma Qpos_upper_recip_invariant : forall x e e',
+    rat (' e) <= x -> rat (' e') <= x ->
+    Qpos_upper_recip e x = Qpos_upper_recip e' x.
+Proof.
+  intros x e e' E1 E2.
+  apply (Qpos_upper_recip_respects (e; (x; E1)) (e'; (x; E2))).
+  unfold pos_back. simpl.
+  apply Sigma.path_sigma_hprop. simpl. reflexivity.
+Qed.
+
+Lemma pos_back_issurj0 : IsSurjection pos_back.
 Proof.
 apply BuildIsSurjection. intros s.
 generalize s.2. apply (Trunc_ind _).
@@ -83,23 +93,37 @@ apply tr. simple refine (existT _ _ _).
 + simpl. unfold pos_back. simpl. apply Sigma.path_sigma_hprop. reflexivity.
 Defined.
 
-Definition R_pos_recip : (exists x : real, 0 < x) -> real.
+Definition pos_back_issurj@{} : IsSurjection pos_back
+  := Eval unfold pos_back_issurj0 in pos_back_issurj0@{Uhuge Ularge Ularge}.
+Existing Instance pos_back_issurj.
+
+Definition R_pos_recip@{} : (exists x : real, 0 < x) -> real.
 Proof.
 simple refine (jections.surjective_factor@{UQ UQ UQ Uhuge Ularge
-    Ularge UQ UQ Uhuge Ularge} _ pos_back _).
+  Ularge Ularge Ularge UQ Ularge
+  UQ Uhuge Ularge} _ pos_back _).
 - intros s. exact (Qpos_upper_recip s.1 s.2.1).
 - simpl. exact Qpos_upper_recip_respects.
 Defined.
 
+Lemma R_pos_recip_pr@{} : forall x, Qpos_upper_recip x.1 (x.2).1 = R_pos_recip (pos_back x).
+Proof.
+  apply jections.surjective_factor_pr.
+Qed.
+
 Lemma R_pos_recip_rat : forall q (Eq : 0 < rat q),
   R_pos_recip (existT _ (rat q) Eq) = rat (/ q).
 Proof.
-intros q. apply (Trunc_ind _);intros [r [s [E1 [E2 E3]]]].
-unfold R_pos_recip.
-unfold jections.surjective_factor,jections.surjective_factor_aux.
-change ((rat ∘ (/)) (join q s) = (rat ∘ (/)) q).
-apply ap. apply join_l.
-apply rat_le_reflecting;trivial.
+  intros q; apply (Trunc_ind _);intros [r [s [E1 [E2 E3]]]].
+  set (xq := (rat q; _)).
+  generalize (center _ (pos_back_issurj xq)). apply (Trunc_ind _).
+  intros [[e [x a]] b]. rewrite <-b.
+  rewrite <-R_pos_recip_pr. simpl.
+  unfold pos_back in b. simpl in b. apply (ap pr1) in b. simpl in b.
+  rewrite b in a |- *.
+  change ((rat ∘ (/)) (join q (' e)) = (rat ∘ (/)) q).
+  apply ap. apply join_l.
+  apply rat_le_reflecting;trivial.
 Qed.
 
 Instance Rrecip : Recip real.
@@ -113,10 +137,10 @@ Lemma Rrecip_rat@{} : forall q (Eq : apart (rat q) 0),
   // (existT (fun y => apart y 0) (rat q) Eq) = rat (/ q).
 Proof.
 simpl;intros q [Eq|Eq];unfold recip;simpl.
-- change (- rat q) with (rat (- q)). rewrite R_pos_recip_rat.
+- change (- rat q) with (rat (- q)). rewrite R_pos_recip_rat@{Uhuge Ularge}.
   apply (ap rat).
   rewrite dec_recip_negate@{UQ Ularge},involutive. trivial.
-- apply R_pos_recip_rat.
+- apply R_pos_recip_rat@{Uhuge Ularge}.
 Qed.
 
 Lemma Rneg_strong_ext : StrongExtensionality (negate (A:=real)).
@@ -156,14 +180,13 @@ intros x e E1 [E2|E2].
   transitivity 0;trivial. apply R_lt_le_trans with (rat (' e));trivial.
   apply rat_lt_preserving;solve_propholds.
 - unfold recip;simpl. revert E2;apply (Trunc_ind _);intros [q [r [E2 [E3 E4]]]].
-  unfold R_pos_recip,jections.surjective_factor,jections.surjective_factor_aux.
-  simpl.
-  transparent assert (X : (exists (e : Q+) (x : real), rat (' e) ≤ x)).
-  { exists {| pos := r;
-      is_pos := le_lt_trans 0 q r (rat_le_reflecting 0 q E2) E3 |}, x.
-    unfold cast;simpl. trivial. }
-  apply (Qpos_upper_recip_respects X (existT _ _ (existT _ _ E1))).
-  unfold pos_back,X;simpl. apply Sigma.path_sigma_hprop. simpl. reflexivity.
+  set (X := (x;_)).
+  generalize (center _ (pos_back_issurj X)). apply (Trunc_ind _).
+  intros [[e' [y a]] b].
+  rewrite <-b, <-R_pos_recip_pr.
+  apply (ap pr1),symmetry in b;simpl in b. destruct b.
+  simpl. clear X.
+  apply Qpos_upper_recip_invariant;trivial.
 Qed.
 
 Instance real_nontrivial : PropHolds (apart (A:=real) 1 0).
@@ -176,7 +199,7 @@ Proof.
 intros x E.
 apply (merely_destruct (Rlt_exists_pos_plus_le _ _ E)). intros [e E1].
 rewrite plus_0_l in E1.
-rewrite (R_recip_upper_recip _ _ E1).
+rewrite (R_recip_upper_recip@{Uhuge Ularge} _ _ E1).
 rewrite <-E1. clear E E1;revert x.
 apply (unique_continuous_extension _).
 - change (Continuous (uncurry mult ∘

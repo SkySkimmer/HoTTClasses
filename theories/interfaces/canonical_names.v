@@ -338,7 +338,7 @@ Class Bind (M : Type -> Type) := bind : forall {A B}, M A -> (A -> M B) -> M B.
 Class Enumerable@{i} (A : Type@{i}) :=
   { enumerator : nat -> A
   ; enumerator_issurj :>
-    TrM.IsConnMap@{Uhuge Ularge i i Ularge} (trunc_S minus_two) enumerator }.
+    TrM.RSU.IsConnMap@{Uhuge Ularge i i Ularge} (trunc_S minus_two) enumerator }.
 Arguments enumerator A {_} _.
 Arguments enumerator_issurj A {_} _.
 

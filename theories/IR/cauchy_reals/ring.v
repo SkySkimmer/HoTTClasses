@@ -140,7 +140,7 @@ Definition interval_back
   := fun x => x.2.1.
 
 Instance interval_proj_issurj@{}
-  : TrM.IsConnMap@{Uhuge Ularge UQ UQ Ularge} (trunc_S minus_two) interval_back.
+  : TrM.RSU.IsConnMap@{Uhuge Ularge UQ UQ Ularge} (trunc_S minus_two) interval_back.
 Proof.
 apply BuildIsSurjection. intros x.
 generalize (R_Qpos_bounded x). apply (Trunc_ind _);intros [q E].
@@ -160,13 +160,16 @@ Qed.
 
 Definition Rmult@{} : Mult real
   := fun x => jections.surjective_factor@{UQ UQ UQ Uhuge Ularge
-    Ularge UQ UQ Uhuge Ularge} _ interval_back (Rbounded_mult_respects x).
+                                       Ularge Ularge Ularge UQ Ularge
+                                       UQ Uhuge Ularge}
+                                     _ interval_back (Rbounded_mult_respects x).
+
 Global Existing Instance Rmult.
 
 Lemma Rmult_pr@{} x : (fun y => Rbounded_mult y.1 x y.2) =
   Compose (x *.) interval_back.
 Proof.
-apply jections.surjective_factor_pr.
+apply path_forall,jections.surjective_factor_pr.
 Qed.
 
 Definition Rmult_rat_rat@{} q r : (rat q) * (rat r) = rat (q * r)
