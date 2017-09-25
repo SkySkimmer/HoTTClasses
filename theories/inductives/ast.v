@@ -1,5 +1,4 @@
-Require Import HoTT.Basics HoTT.Types.
-Require Import HoTTClasses.theory.jections.
+Require Import HoTT.Basics HoTT.Types HoTT.HIT.Truncations.
 
 Local Open Scope list_scope.
 

@@ -2,7 +2,7 @@ Require HoTT.
 Import HoTT.Basics.
 Import HoTT.Types.Bool HoTT.Types.Sum.
 Require Import HoTT.FunextAxiom.
-Require Import HoTTClasses.theory.inductives.ast.
+Require Import HoTTClasses.inductives.ast.
 
 (** Acc isn't in HoTT's library *)
 Inductive Acc {A : Type} (R : A -> A -> Type) (x : A) : Type :=
@@ -645,7 +645,7 @@ Module Abstract.
       - intros pA. apply (compose_is_morphism _ _ (cB (Fpos F pos pA)));trivial.
         refine (transport (fun p => is_morphism _ _ _ (cC p)) (Fpos_compose pos pA)^ _).
         apply mG.
-      - path_via (G i cB).
+      - path_via (G i cB). apply ap,mF.
     Qed.
   End ComposeMorphism.
 
