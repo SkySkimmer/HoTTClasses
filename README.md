@@ -1,12 +1,15 @@
 # HoTT Classes
 
-Based on [Math Classes](https://math-classes.github.io/) but for [HoTT](https://github.com/hott/hott).
+This repository used to contain formalizations of algebra based on
+[Math Classes](https://math-classes.github.io/) but for
+[HoTT](https://github.com/hott/hott). They have been merged in
+upstream HoTT ([commit dd7c823](https://github.com/HoTT/HoTT/commit/dd7c8232a59bbfbab1a880688c5895cf616654fb)).
 
-Notable differences:
-- less stuff
-- no setoids (HoTT has quotient types)
+Here remain results depending on inductive-inductive types, an
+experimental feature not yet merged in Coq, mostly about defining
+Cauchy real numbers.
 
-# Publications
+# Related Publications
 
 See SCIENCE.md
 
@@ -24,16 +27,6 @@ You can follow what travis does ([.travis.yml](.travis.yml), [build-dependencies
 - `./configure --hoqdir HoTT/ --coqbin coq/bin/`
 
 - `make`
-
-# Build with unmodified dependencies
-
-It is possible to build some of HoTTClasses with Coq 8.6 and HoTT
-master. Only the files in [theories/IR](theories/IR) and the summaries
-at the root of [theories](theories) will be skipped.
-
-It is also possible to build with Coq trunk and [a modified HoTT](https://github.com/SkySkimmer/HoTT/tree/coq-trunk).
-
-In both cases you will need to pass an additional `--no-ir` to HoTTClasses's configure script.
 
 # Using IDEs
 

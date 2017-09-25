@@ -8,8 +8,6 @@ function usage {
     >&2 echo
     >&2 echo "options are:"
 
-    >&2 echo -e "\t--no-ir\t\tdo not compile files depending on inductive-inductive types"
-
     >&2 echo -e "\t--hoqdir <dir>\tdirectory containing hoqc, hoqtop and hoqdep"
     >&2 echo -e "\t\t\t(can be passed through environment variable HOQDIR)"
 
@@ -24,13 +22,10 @@ function usage {
 }
 
 DO_EMACS=true
-USE_IR=true
 
 while [[ "$#" -gt 0 ]]
 do
     case "$1" in
-        "--no-ir")
-            USE_IR=false;;
         "--hoqdir")
             if [[ "$#" = 1 ]]
             then
@@ -110,7 +105,6 @@ else
 fi
 
 echo "Summary:"
-echo "Compiling files in theories/IR: $USE_IR"
 echo "Generate .dir-locals.el: $DO_EMACS"
 echo "HOQC=$HOQC"
 echo "HOQTOP=$HOQTOP"
@@ -126,13 +120,7 @@ echo "COQDEP = $HOQDEP" >> "$OPTFILE"
 
 #non IR find
 #HoTTBook and CPP depend on IR
-find ./theories -not \( -path './theories/IR' -prune \) -not -name CPP2017.v -not -name HoTTBook.v -name '*.v' -print >> "$OPTFILE"
-if $USE_IR
-then
-    find ./theories/IR/ -name '*.v' >> "$OPTFILE"
-    echo ./theories/CPP2017.v >> "$OPTFILE"
-    echo ./theories/HoTTBook.v >> "$OPTFILE"
-fi
+find ./theories -name '*.v' -print >> "$OPTFILE"
 
 "$COQMAKEFILE" -f "$OPTFILE" -o Makefile || exit 1
 

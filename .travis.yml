@@ -26,10 +26,6 @@ env:
   # system is == 4.02.3
   - COMPILER="system"
   - CAMLP5_VER="6.14"
-  matrix:
-    - TARGET="IR"
-    - TARGET="trunk"
-    - TARGET="8.6"
 
 install:
 - opam init -j ${NJOBS} --compiler=${COMPILER} -n -y
