@@ -9,6 +9,7 @@ addons:
     - avsm
     packages:
     - opam
+    - aspcud
 
 cache:
   apt: true
