@@ -8,17 +8,17 @@ function usage {
     >&2 echo
     >&2 echo "options are:"
 
-    >&2 echo -e "\t--hoqdir <dir>\tdirectory containing hoqc, hoqtop and hoqdep"
-    >&2 echo -e "\t\t\t(can be passed through environment variable HOQDIR)"
+    >&2 printf '\t--hoqdir <dir>\tdirectory containing hoqc, hoqtop and hoqdep'
+    >&2 printf '\t\t\t(can be passed through environment variable HOQDIR)'
 
-    >&2 echo -e "\t--coqbin <dir>\tdirectory containing coq_makefile"
-    >&2 echo -e "\t\t\t(can be passed through environment variable COQBIN)"
+    >&2 printf '\t--coqbin <dir>\tdirectory containing coq_makefile'
+    >&2 printf '\t\t\t(can be passed through environment variable COQBIN)'
 
-    >&2 echo -e "\t--no-emacs\tdo not generate .dir-locals.el"
+    >&2 printf '\t--no-emacs\tdo not generate .dir-locals.el'
 
-    >&2 echo -e "\t-h\t\tdisplay this list of options and quit"
-    >&2 echo -e "\t-help\t\tdisplay this list of options and quit"
-    >&2 echo -e "\t--help\t\tdisplay this list of options and quit"
+    >&2 printf '\t-h\t\tdisplay this list of options and quit'
+    >&2 printf '\t-help\t\tdisplay this list of options and quit'
+    >&2 printf '\t--help\t\tdisplay this list of options and quit'
 }
 
 DO_EMACS=true
@@ -60,9 +60,9 @@ done
 if [ -z "${HOQDIR}" ]
 then
     OK=true
-    HOQC=$(which hoqc) || OK=false
-    HOQTOP=$(which hoqtop) || OK=false
-    HOQDEP=$(which hoqdep) || OK=false
+    HOQC=$(command -v hoqc) || OK=false
+    HOQTOP=$(command -v hoqtop) || OK=false
+    HOQDEP=$(command -v hoqdep) || OK=false
     if $OK
     then
         :
@@ -83,7 +83,7 @@ fi
 if [ -z "${COQBIN}" ]
 then
     OK=true
-    COQMAKEFILE=$(which coq_makefile) || OK=false
+    COQMAKEFILE=$(command -v coq_makefile) || OK=false
     if $OK
      then
          :
@@ -94,7 +94,7 @@ then
      fi
 else
     COQMAKEFILE=$(readlink -nm "$COQBIN/coq_makefile")
-    if [ "(" -x "$COQMAKEFILE" ")" -a ! "(" -d "$COQMAKEFILE" ")" ]
+    if [ -x "$COQMAKEFILE" ] && [ -f "$COQMAKEFILE" ]
     then
         :
     else
