@@ -2,9 +2,9 @@
 
 set -x
 
-echo -en 'travis_fold:start:main\\r'
+printf 'travis_fold:start:main\\r'
 
 ./configure --hoqdir HoTT --coqbin coq/bin || exit 1
-make -j 2
+make -j "$NJOBS"
 
-echo -en 'travis_fold:end:main\\r'
+printf 'travis_fold:end:main\\r'
