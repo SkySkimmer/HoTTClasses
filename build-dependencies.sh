@@ -22,9 +22,9 @@ printf 'travis_fold:start:cache.check\\r'
 #NB: always use SkySkimmer/HoTT because I can have PRs not yet merged
 #in HoTT/HoTT and ejgallego/HoTT
 COQ_URL="https://github.com/mattam82/coq.git"
-COQ_BRANCH="IR"
+COQ_BRANCH="inductive-inductive-types"
 HOTT_URL="https://github.com/SkySkimmer/HoTT.git"
-HOTT_BRANCH="mz-8.7"
+HOTT_BRANCH="for-hottclasses-up"
 
 if [ -d coq ];
 then

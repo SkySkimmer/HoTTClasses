@@ -1,5 +1,8 @@
 _build/
 Makefile
+*.d
+/HoTT
+/coq
 Makefile.conf
 *.vo
 *.vo.aux

@@ -1,6 +1,6 @@
 Require HoTT.
-Import HoTT.Basics.
-Import HoTT.Types.Bool HoTT.Types.Sum.
+Import HoTT.Basics HoTT.HFiber.
+Import HoTT.Types.
 Require Import HoTT.FunextAxiom.
 Require Import HoTTClasses.inductives.ast.
 
@@ -156,7 +156,7 @@ Module Packed.
 
     Local Instance isequiv_IndT'_to_sigInd i : IsEquiv (IndT'_to_sigInd i).
     Proof.
-      srefine (BuildIsEquiv _ _ _ (sigInd_to_IndT' i) _ _ _).
+      srefine (Build_IsEquiv _ _ _ (sigInd_to_IndT' i) _ _ _).
       - intros [x rec];reflexivity.
       - intros [x rec];reflexivity.
       - intros [x rec];simpl. reflexivity.
@@ -227,7 +227,7 @@ Module Packed.
     (* NB: [IsEmbedding iota] is NOT an hypothesis! *)
     Lemma isembedding_pack : IsEmbedding IndPackC.
     Proof.
-      apply Fibrations.isembedding_isequiv_ap.
+      apply isembedding_isequiv_ap.
       intros [x recx] [y recy].
       srefine (isequiv_adjointify _ _ _ _).
       - intros e. apply Sigma.path_sigma_uncurried. simpl.
@@ -680,7 +680,7 @@ Module Abstract.
                         (default_is_morphism _ _ _ _ (ind_computes Bisind)).
 
     Definition inductive_default_equiv : forall i, A i <~> B i
-      := fun i => BuildEquiv _ _ _ (inductive_default_isequiv i).
+      := fun i => Build_Equiv _ _ _ (inductive_default_isequiv i).
 
   End EquivInductive.
 
@@ -1017,7 +1017,7 @@ Module Pack.
         - intros c rec hf p.
           apply pack_computes_at.
           intros x y.
-          etransitivity. apply hf.
+          etransitivity. 1:by apply hf.
           etransitivity.
           { simpl. unfold sum_arrow_forall_ind.
             set (C := fun _ => T _).

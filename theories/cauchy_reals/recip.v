@@ -83,7 +83,7 @@ Proof.
   apply Sigma.path_sigma_hprop. simpl. reflexivity.
 Qed.
 
-Lemma pos_back_issurj0 : IsSurjection pos_back.
+Lemma pos_back_issurj@{} : IsSurjection pos_back.
 Proof.
 apply BuildIsSurjection. intros s.
 generalize s.2. apply (Trunc_ind _).
@@ -95,15 +95,11 @@ apply tr. simple refine (existT _ _ _).
 + simpl. unfold pos_back. simpl. apply Sigma.path_sigma_hprop. reflexivity.
 Defined.
 
-Definition pos_back_issurj@{} : IsSurjection pos_back
-  := Eval unfold pos_back_issurj0 in pos_back_issurj0@{Uhuge Ularge Ularge}.
 Existing Instance pos_back_issurj.
 
 Definition R_pos_recip@{} : (exists x : real, 0 < x) -> real.
 Proof.
-simple refine (surjective_factor@{UQ UQ UQ Uhuge Ularge
-  Ularge Ularge Ularge UQ Ularge
-  UQ Uhuge Ularge} _ pos_back _).
+simple refine (surjective_factor _ pos_back _).
 - intros s. exact (Qpos_upper_recip s.1 s.2.1).
 - simpl. exact Qpos_upper_recip_respects.
 Defined.
@@ -118,7 +114,7 @@ Lemma R_pos_recip_rat : forall q (Eq : 0 < rat q),
 Proof.
   intros q; apply (Trunc_ind _);intros [r [s [E1 [E2 E3]]]].
   set (xq := (rat q; _)).
-  generalize (center _ (pos_back_issurj xq)). apply (Trunc_ind _).
+  generalize (@center _ (pos_back_issurj xq)). apply (Trunc_ind _).
   intros [[e [x a]] b]. rewrite <-b.
   rewrite <-R_pos_recip_pr. simpl.
   unfold pos_back in b. simpl in b. apply (ap pr1) in b. simpl in b.
@@ -139,10 +135,10 @@ Lemma Rrecip_rat@{} : forall q (Eq : apart (rat q) 0),
   // (existT (fun y => apart y 0) (rat q) Eq) = rat (/ q).
 Proof.
 simpl;intros q [Eq|Eq];unfold recip;simpl.
-- change (- rat q) with (rat (- q)). rewrite R_pos_recip_rat@{Uhuge Ularge}.
+- change (- rat q) with (rat (- q)). rewrite R_pos_recip_rat.
   apply (ap rat).
-  rewrite dec_recip_negate@{UQ Ularge},involutive. trivial.
-- apply R_pos_recip_rat@{Uhuge Ularge}.
+  rewrite dec_recip_negate,involutive. trivial.
+- apply R_pos_recip_rat.
 Qed.
 
 Lemma Rneg_strong_ext : StrongExtensionality (negate (A:=real)).
@@ -150,7 +146,7 @@ Proof.
 hnf. intros x y [E|E];[right|left];apply Rneg_lt_flip,E.
 Defined.
 
-Instance Rneg_strong_injective : StrongInjective (negate (A:=real)).
+Instance Rneg_strong_injective : IsStrongInjective (negate (A:=real)).
 Proof.
 split;try apply Rneg_strong_ext.
 intros x y [E|E];[right|left];apply Rneg_lt_flip;rewrite !involutive;trivial.
@@ -183,7 +179,7 @@ intros x e E1 [E2|E2].
   apply rat_lt_preserving;solve_propholds.
 - unfold recip;simpl. revert E2;apply (Trunc_ind _);intros [q [r [E2 [E3 E4]]]].
   set (X := (x;_)).
-  generalize (center _ (pos_back_issurj X)). apply (Trunc_ind _).
+  generalize (@center _ (pos_back_issurj X)). apply (Trunc_ind _).
   intros [[e' [y a]] b].
   rewrite <-b, <-R_pos_recip_pr.
   apply (ap pr1),symmetry in b;simpl in b. destruct b.
@@ -201,7 +197,7 @@ Proof.
 intros x E.
 apply (merely_destruct (Rlt_exists_pos_plus_le _ _ E)). intros [e E1].
 rewrite plus_0_l in E1.
-rewrite (R_recip_upper_recip@{Uhuge Ularge} _ _ E1).
+rewrite (R_recip_upper_recip _ _ E1).
 rewrite <-E1. clear E E1;revert x.
 apply (unique_continuous_extension _).
 - change (Continuous (uncurry mult ∘

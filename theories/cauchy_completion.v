@@ -3,6 +3,7 @@ Require Import
   HoTT.Basics.Decidable
   HoTT.FunextAxiom
   HoTT.UnivalenceAxiom
+  HoTT.HProp
   HoTT.Classes.interfaces.abstract_algebra
   HoTT.Classes.interfaces.integers
   HoTT.Classes.interfaces.naturals
@@ -19,6 +20,8 @@ Require Import
   HoTT.Classes.theory.premetric
   HoTT.Classes.implementations.assume_rationals.
 
+Global Set Loose Hint Behavior "Lax".
+
 Local Set Universe Minimization ToSet.
 
 Module Export Cauchy.
@@ -31,7 +34,7 @@ Private Inductive C@{} : Type@{UQ} :=
   | eta : T -> C
   | Clim : Lim C
 
-with equiv@{} : Closeness@{UQ} C :=
+with equiv : Closeness@{UQ} C :=
   (* TODO NonExpanding eta ?? *)
   | equiv_eta_eta : forall (q r : T) (e : Q+),
       close e q r ->
@@ -297,7 +300,7 @@ Existing Instance equiv_refl.
 
 Lemma C_isset@{} : IsHSet (C T).
 Proof.
-eapply @HSet.isset_hrel_subpaths.
+eapply @HSet.ishset_hrel_subpaths.
 3:apply equiv_path.
 - red. intros;reflexivity.
 - apply _.
@@ -340,11 +343,10 @@ intros. apply tr. exists (const_approx b).
 apply lim_cons.
 Defined.
 
-Lemma lim_epi@{i j k} : epi.isepi@{UQ UQ i j k} (lim (A:=C T)).
+Lemma lim_epi : epi.isepi (lim (A:=C T)).
 Proof.
-apply epi.issurj_isepi@{UQ UQ Uhuge Ularge i
-  k Ularge j}.
-exact lim_issurj.
+  apply epi.issurj_isepi.
+  exact lim_issurj.
 Qed.
 
 Definition equiv_rect0@{i}
@@ -462,7 +464,7 @@ End mutual_recursion.
 Section equiv_alt.
 
 Definition balls@{} := sigT@{Ularge UQ}
-  (fun half : C T -> Q+ -> TruncType@{UQ} -1 =>
+  (fun half : C T -> Q+ -> TruncType@{UQ} (-1) =>
   (forall u e, half u e <-> merely (exists d d', e = d + d' /\ half u d))
   /\ (forall u v n e, close e u v -> half u n -> half v (n+e))).
 
@@ -470,13 +472,13 @@ Definition balls_close@{} e (R1 R2 : balls)
   := forall u n, (R1.1 u n -> R2.1 u (e+n)) /\ (R2.1 u n -> R1.1 u (e+n)).
 
 Definition upper_cut@{} := sigT@{Ularge UQ}
-  (fun R : Q+ -> TruncType@{UQ} -1 =>
+  (fun R : Q+ -> TruncType@{UQ} (-1) =>
     forall e, R e <-> merely (exists d d', e = d + d' /\ R d)).
 
 Definition upper_cut_close@{} e (R1 R2 : upper_cut)
   := forall n, (R1.1 n -> R2.1 (e+n)) /\ (R2.1 n -> R1.1 (e+n)).
 
-Lemma balls_separated' : forall u v,
+Lemma balls_separated@{} : forall u v,
   (forall e, balls_close e u v) -> u = v.
 Proof.
 intros u v E.
@@ -496,9 +498,6 @@ split;intros E'.
   rewrite He. rewrite qpos_plus_comm. apply (snd (E _ _ _)).
   trivial.
 Qed.
-
-Definition balls_separated@{}
-  := balls_separated'@{Ularge Uhuge}.
 
 Instance balls_close_hprop@{}
   : forall e u v, IsHProp (balls_close e u v).
@@ -545,7 +544,7 @@ exists (fun e => merely (exists d d', e = d + d' /\ (val_ind d).1 d')).
 apply eta_lim_rounded_step. trivial.
 Defined.
 
-Lemma upper_cut_separated' : forall x y : upper_cut,
+Lemma upper_cut_separated@{} : forall x y : upper_cut,
   (forall e : Q+, upper_cut_close e x y) -> x = y.
 Proof.
 intros x y E.
@@ -565,9 +564,6 @@ split;intros E'.
   rewrite He,qpos_plus_comm.
   apply (snd (E _ _)). trivial.
 Qed.
-
-Definition upper_cut_separated@{}
-  := upper_cut_separated'@{Ularge Uhuge}.
 
 Lemma equiv_alt_eta_eta_eta_pr@{} :
 forall q q0 r (e : Q+),
@@ -1084,6 +1080,9 @@ Defined.
 Definition equiv_alt : Q+ -> C T -> C T -> Type
   := fun e x y => (equiv_alt_balls x).1 y e.
 
+Instance ishprop_equiv_alt (e : Q+) (u v : C T) : IsHProp (equiv_alt e u v).
+Proof. unfold equiv_alt;exact _. Qed.
+
 Definition equiv_alt_eta_eta_def@{} : forall e q r,
   paths@{Ularge} (equiv_alt e (eta q) (eta r)) (close e q r).
 Proof.
@@ -1133,7 +1132,7 @@ pose proof (fun x y => snd (equiv_alt_balls x).2 _ _ y _ E1).
    as we just rewrite Requiv_alt = Requiv in the previous one. *)
 Abort.
 
-Lemma equiv_to_equiv_alt' : forall e u v, close e u v -> equiv_alt e u v.
+Lemma equiv_to_equiv_alt@{} : forall e u v, close e u v -> equiv_alt e u v.
 Proof.
 apply (equiv_rec0 _).
 - auto.
@@ -1145,10 +1144,7 @@ apply (equiv_rec0 _).
   rewrite He;apply pos_eq;ring_tac.ring_with_nat.
 Qed.
 
-Definition equiv_to_equiv_alt@{}
-  := equiv_to_equiv_alt'@{UQ UQ UQ}.
-
-Lemma equiv_alt_to_equiv' : forall e u v, equiv_alt e u v -> close e u v.
+Lemma equiv_alt_to_equiv@{} : forall e u v, equiv_alt e u v -> close e u v.
 Proof.
 intros e u v;revert u v e.
 apply (C_ind0 (fun u => forall v e, _ -> _)).
@@ -1168,9 +1164,6 @@ apply (C_ind0 (fun u => forall v e, _ -> _)).
     rewrite He;apply pos_eq;ring_tac.ring_with_nat.
 Qed.
 
-Definition equiv_alt_to_equiv@{}
-  := equiv_alt_to_equiv'@{UQ UQ UQ UQ}.
-
 Lemma equiv_alt_rw' : equiv_alt = close.
 Proof.
 repeat (apply path_forall;intro);apply TruncType.path_iff_ishprop_uncurried.
@@ -1188,7 +1181,7 @@ rewrite <-equiv_alt_rw;trivial.
 Qed.
 
 Definition equiv_eta_eta_def@{}
-  := equiv_eta_eta_def'@{Ularge UQ UQ}.
+  := equiv_eta_eta_def'@{Ularge}.
 
 Lemma equiv_eta_lim_def' : forall e q y,
   close e (eta q) (lim y) =
@@ -1198,7 +1191,7 @@ rewrite <-equiv_alt_rw;trivial.
 Qed.
 
 Definition equiv_eta_lim_def@{}
-  := equiv_eta_lim_def'@{Ularge UQ UQ}.
+  := equiv_eta_lim_def'@{Ularge}.
 
 Lemma equiv_lim_eta_def' : forall e x r,
   close e (lim x) (eta r) =
@@ -1208,7 +1201,7 @@ rewrite <-equiv_alt_rw;trivial.
 Qed.
 
 Definition equiv_lim_eta_def@{}
-  := equiv_lim_eta_def'@{Ularge UQ UQ}.
+  := equiv_lim_eta_def'@{Ularge}.
 
 Lemma equiv_lim_lim_def' : forall e (x y : Approximation (C T)),
   close e (lim x) (lim y) =
@@ -1218,25 +1211,19 @@ rewrite <-equiv_alt_rw;trivial.
 Qed.
 
 Definition equiv_lim_lim_def@{}
-  := equiv_lim_lim_def'@{Ularge UQ UQ}.
+  := equiv_lim_lim_def'@{Ularge}.
 
-Lemma equiv_rounded' : Rounded (C T).
+Lemma equiv_rounded@{} : Rounded (C T).
 Proof.
 hnf. rewrite <-equiv_alt_rw;exact equiv_alt_round.
 Qed.
 
-Definition equiv_rounded@{}
-  := @equiv_rounded'@{UQ}.
-
-Lemma equiv_triangle' : Triangular (C T).
+Lemma equiv_triangle@{} : Triangular (C T).
 Proof.
 hnf;intros. rewrite <-equiv_alt_rw.
 apply equiv_alt_equiv with v;trivial.
 rewrite equiv_alt_rw;trivial.
 Qed.
-
-Definition equiv_triangle@{}
-  := equiv_triangle'@{UQ UQ}.
 
 End equiv_alt.
 
@@ -1328,7 +1315,7 @@ Proof.
 intros u v [] e;apply (equiv_refl _).
 Qed.
 
-Lemma eta_injective@{} : Injective eta.
+Lemma eta_injective@{} : IsInjective eta.
 Proof.
 intros q r E.
 apply separated.
@@ -1340,7 +1327,7 @@ Qed.
 Global Existing Instance eta_injective.
 
 Section lipschitz_extend.
-Context `{PreMetric A} {Alim : Lim A} `{!CauchyComplete A}.
+Context {A} `{PreMetric A} {Alim : Lim A} `{!CauchyComplete A}.
 Variables (f : T -> A) (L : Q+).
 Context {Ef : Lipschitz f L}.
 
@@ -1389,8 +1376,8 @@ Lemma lipschitz_extend_lim_pr@{} :
   forall d e : Q+, close (d + e) (a (d / L)) (a (e / L)).
 Proof.
 intros. pattern (d+e);eapply transport.
-apply symmetry, (pos_recip_through_plus d e L).
-apply Ea.
+- apply symmetry, (pos_recip_through_plus d e L).
+- apply Ea.
 Qed.
 
 Lemma separate_mult@{} : forall l (u v : A),
@@ -1491,17 +1478,16 @@ Definition back_eta@{} : forall x, completion_back (eta x) = x
   := fun _ => idpath.
 
 Global Instance eta_isequiv : IsEquiv eta
-  := BuildIsEquiv T _ eta completion_back eta_back back_eta
+  := Build_IsEquiv T _ eta completion_back eta_back back_eta
     (fun _ => path_ishprop _ _).
 
 Definition eta_equiv : T <~> C T
-  := BuildEquiv _ _ eta _.
+  := Build_Equiv _ _ eta _.
 
-Lemma C_of_complete' : C T = T :> Type@{UQ}.
+Lemma C_of_complete@{u} : @paths@{u} Type@{UQ} (C T) T.
 Proof.
 symmetry;apply path_universe with eta. apply _.
 Defined.
-Definition C_of_complete@{i} := C_of_complete'@{i UQ UQ}.
 
 End completion_of_complete.
 
@@ -1623,7 +1609,7 @@ Qed.
 
 Global Instance completion_pair_isequiv@{} : IsEquiv completion_pair.
 Proof.
-simple refine (BuildIsEquiv _ _ _ (uncurry pair_completion) _ _ _).
+simple refine (Build_IsEquiv _ _ _ (uncurry pair_completion) _ _ _).
 - hnf. unfold uncurry. intros [a b];simpl;revert a.
   apply (unique_continuous_extension _ _ _).
   intros q. revert b. apply (unique_continuous_extension _ _ _).
@@ -1634,7 +1620,7 @@ simple refine (BuildIsEquiv _ _ _ (uncurry pair_completion) _ _ _).
 Defined.
 
 Definition completion_pair_equiv@{} : C (A /\ B) <~> (C A /\ C B)
-  := BuildEquiv _ _ completion_pair _.
+  := Build_Equiv _ _ completion_pair _.
 
 Lemma completion_prod_rw : C (A /\ B) = (C A /\ C B) :> Type@{UQ}.
 Proof.

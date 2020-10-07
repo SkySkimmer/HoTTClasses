@@ -22,7 +22,7 @@ Require Export
 
 Local Set Universe Minimization ToSet.
 
-Lemma Rle_close_rat_rat' : forall q v e, close e (rat q) v ->
+Lemma Rle_close_rat_rat@{} : forall q v e, close e (rat q) v ->
   v <= rat (q + ' e).
 Proof.
 intros q.
@@ -48,9 +48,6 @@ apply (C_ind0 _ (fun v => forall e, _ -> _)).
   * exact E2.
   * rewrite <-(Qpos_mult_1_l a),pos_unconjugate. exact E3.
 Qed.
-
-Definition Rle_close_rat_rat@{}
-  := Rle_close_rat_rat'@{UQ}.
 
 Lemma Rle_close_rat@{} : forall q u, u <= rat q -> forall v e, close e u v ->
   v <= rat (q + ' e).

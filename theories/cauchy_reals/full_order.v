@@ -237,7 +237,7 @@ simpl. apply join_r.
 rewrite plus_0_l. apply R_lt_le;trivial.
 Qed.
 
-Lemma R_not_lt_le_flip : forall x y : real, ~ x < y -> y <= x.
+Lemma R_not_lt_le_flip : forall x y : real, ~ (x < y) -> y <= x.
 Proof.
 intros x y E.
 apply flip_nonneg_minus.

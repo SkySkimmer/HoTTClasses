@@ -142,7 +142,7 @@ Definition interval_back
   := fun x => x.2.1.
 
 Instance interval_proj_issurj@{}
-  : TrM.RSU.IsConnMap@{Uhuge Ularge UQ UQ Ularge} (trunc_S minus_two) interval_back.
+  : IsConnMap (trunc_S minus_two) interval_back.
 Proof.
 apply BuildIsSurjection. intros x.
 generalize (R_Qpos_bounded x). apply (Trunc_ind _);intros [q E].
@@ -161,10 +161,7 @@ exact (ap _ E).
 Qed.
 
 Definition Rmult@{} : Mult real
-  := fun x => surjective_factor@{UQ UQ UQ Uhuge Ularge
-                                       Ularge Ularge Ularge UQ Ularge
-                                       UQ Uhuge Ularge}
-                                     _ interval_back (Rbounded_mult_respects x).
+  := fun x => surjective_factor _ interval_back (Rbounded_mult_respects x).
 
 Global Existing Instance Rmult.
 
@@ -360,7 +357,7 @@ change (forall x, Continuous (uncurry (@mult real _) ∘ (pair x))).
 intros;apply continuous_compose; apply _.
 Qed.
 
-Instance real_ring@{} : Ring real.
+Instance real_ring@{} : IsRing real.
 Proof.
 repeat (split;try apply _);
 unfold sg_op,mon_unit,mult_is_sg_op,one_is_mon_unit;

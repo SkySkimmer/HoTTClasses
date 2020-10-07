@@ -118,7 +118,7 @@ hnf. apply unique_continuous_ternary_extension.
 intros;change (rat (q + (r + s)) = rat (q + r + s));apply (ap rat),plus_assoc.
 Qed.
 
-Instance Rplus_group@{} : Group real.
+Instance Rplus_group@{} : IsGroup real.
 Proof.
 repeat split.
 - apply _.
@@ -180,7 +180,7 @@ Global Instance Rlt@{} : Lt real := fun x y =>
   merely (exists q r, x <= (rat q) /\ q < r /\ (rat r) <= y).
 Arguments Rlt _ _ /.
 
-Global Instance Rap@{} : Apart@{UQ UQ} real := fun x y => x < y \/ y < x.
+Global Instance Rap@{} : Apart@{UQ UQ} real := fun x y => sum (x < y) (y < x).
 Arguments Rap _ _ /.
 
 Instance Rjoin_comm@{} : Commutative (@join _ Rjoin).
@@ -194,7 +194,7 @@ Qed.
 
 Existing Instance lattice_order_lattice.
 
-Lemma R_lattice' : LatticeOrder Rle.
+Instance R_lattice@{} : LatticeOrder Rle.
 Proof.
 split.
 - apply @alt_Build_MeetSemiLatticeOrder;[
@@ -253,9 +253,6 @@ split.
     { change (Continuous (uncurry join ∘ (@BinaryDup real)));apply _. }
     intros;apply (ap rat),idempotency,_.
 Qed.
-
-Instance R_lattice@{} : LatticeOrder Rle
-  := R_lattice'@{Ularge UQ}.
 
 Lemma Rplus_le_preserving@{} : forall z : real,
   OrderPreserving (z +).

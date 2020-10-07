@@ -29,7 +29,7 @@ Require Export
 
 Local Set Universe Minimization ToSet.
 
-Global Instance real_field : Field real.
+Global Instance real_field : IsField real.
 Proof.
 split;try apply _.
 apply R_recip_inverse.

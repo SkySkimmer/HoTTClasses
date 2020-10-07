@@ -25,7 +25,7 @@ Require Export
 
 Local Set Universe Minimization ToSet.
 
-Lemma equiv_0_metric' : forall e u, close e u 0 -> abs u < rat (' e).
+Lemma equiv_0_metric@{} : forall e u, close e u 0 -> abs u < rat (' e).
 Proof.
 intros e u;revert u e;apply (C_ind0 _ (fun u => forall e, _ -> _)).
 - intros q e E.
@@ -46,9 +46,6 @@ intros e u;revert u e;apply (C_ind0 _ (fun u => forall e, _ -> _)).
   apply (non_expanding abs).
   rewrite qpos_plus_comm. apply (equiv_lim _).
 Qed.
-
-Definition equiv_0_metric@{}
-  := equiv_0_metric'@{UQ UQ}.
 
 Lemma equiv_to_metric@{} : forall e u v, close e u v -> abs (u - v) < rat (' e).
 Proof.

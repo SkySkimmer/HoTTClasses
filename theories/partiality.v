@@ -7,6 +7,8 @@ Require Import
   HoTT.Classes.interfaces.monad
   HoTT.Classes.implementations.peano_naturals.
 
+Global Set Loose Hint Behavior "Lax".
+
 Local Set Universe Minimization ToSet.
 
 Record IncreasingSequence A {Ale : Le A} :=
@@ -18,7 +20,7 @@ Arguments Build_IncreasingSequence {A Ale} seq seq_increasing.
 Arguments seq {A Ale} _ _.
 Arguments seq_increasing {A Ale} _ _.
 
-Global Instance seq_increasing_le `{PartialOrder A} (s : IncreasingSequence A)
+Global Instance seq_increasing_le {A} `{PartialOrder A} (s : IncreasingSequence A)
   : OrderPreserving (seq s).
 Proof.
 hnf. intros a b E;induction E as [|b IH].
@@ -37,14 +39,14 @@ Private Inductive partial@{} : Type@{i} :=
   | bot : Bottom partial
   | sup : IncreasingSequence partial -> partial
 
-with partialLe@{} : Le partial :=
+with partialLe : Le partial :=
   | partial_refl : Reflexive partialLe
   | bot_least : forall x, bot <= x
   | sup_le_l : forall f x, sup f <= x -> forall n, f n <= x
   | sup_le_r : forall f x, (forall n, seq f n <= x) -> sup f <= x
 .
-Axiom partial_antisymm : AntiSymmetric partialLe.
-Axiom partialLe_hprop : is_mere_relation partial partialLe.
+Global Declare Instance partial_antisymm : AntiSymmetric partialLe.
+Global Declare Instance partialLe_hprop : is_mere_relation partial partialLe.
 
 Global Existing Instance partialLe.
 Global Existing Instance partialLe_hprop.
@@ -240,7 +242,7 @@ Qed.
 
 Global Instance partial_set@{} : IsHSet (partial@{UA} A).
 Proof.
-apply (@HSet.isset_hrel_subpaths _ (fun x y => x <= y /\ y <= x)).
+apply (@HSet.ishset_hrel_subpaths _ (fun x y => x <= y /\ y <= x)).
 - intros x;split;apply partial_refl.
 - apply _.
 - intros x y E;apply partial_antisymm;apply E.

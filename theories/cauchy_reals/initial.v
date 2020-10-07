@@ -25,7 +25,7 @@ Local Set Universe Minimization ToSet.
 
 Section real_initial.
 
-Context `{Field F} `{!FullPseudoSemiRingOrder (A:=F) Fle Flt}.
+Context {F} `{IsField F} {Fle Flt} `{!FullPseudoSemiRingOrder (A:=F) Fle Flt}.
 
 Variable F_archimedean : forall x y : F, x < y ->
   merely (exists q, x < rationals_to_field Q F q < y).

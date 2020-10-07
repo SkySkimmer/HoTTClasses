@@ -27,7 +27,7 @@ Require Export
 
 Local Set Universe Minimization ToSet.
 
-Lemma uniform_on_intervals_continuous `{Closeness A} (f:real -> A)
+Lemma uniform_on_intervals_continuous {A} `{Closeness A} (f:real -> A)
   (mu : Q+ -> Q+ -> Q+)
   {Emu : forall a : Q+,
     Uniform (f ∘ interval_proj (rat (- ' a)) (rat (' a))) (mu a)}

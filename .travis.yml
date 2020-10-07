@@ -32,7 +32,7 @@ install:
 - opam init --compiler=${COMPILER} -n default https://opam.ocaml.org
 - eval $(opam config env)
 - opam config list
-- opam install camlp5.7.12 ocamlfind num
+- opam install ocamlfind num zarith
 - opam list
 
 - ./build-dependencies.sh

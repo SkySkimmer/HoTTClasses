@@ -1,4 +1,4 @@
-Require Import HoTT.Basics HoTT.Types HoTT.HIT.Truncations.
+Require Import HoTT.Basics HoTT.Types HoTT.Truncations HoTT.HFiber.
 
 Local Open Scope list_scope.
 
@@ -214,7 +214,7 @@ Instance istruncmap_S {n A B} (f : A -> B) {Hf : IsTruncMap n f} : IsTruncMap n.
 Instance istruncmap_isequiv {n A B} (f : A -> B) `{!IsEquiv f} : IsTruncMap n f.
 Proof.
   induction n as [|n IHn].
-  - red;apply EquivalenceVarieties.fcontr_isequiv,_.
+  - apply _.
   - apply _.
 Qed.
 
@@ -231,18 +231,18 @@ Qed.
 Fixpoint istruncmap_mcond {n A B} (e : mexpr A B) : mcond n e -> IsTruncMap n (eval_mexpr e).
 Proof.
   destruct e as [A B x|A|A B C g ef|A B C eg f|A B C D ef eg];simpl;intros Hcond.
-  - destruct Hcond as [HA HB]. exact _.
+  - destruct Hcond as [HA HB]. red. exact _.
   - apply _.
   - destruct Hcond as [Hg Hf].
-    apply Fibrations.istruncmap_compose.
+    apply istruncmap_compose.
     + exact Hg.
     + exact (istruncmap_mcond _ _ _ _ Hf).
   - destruct Hcond as [Hg Hf].
-    apply Fibrations.istruncmap_compose.
+    apply istruncmap_compose.
     + exact (istruncmap_mcond _ _ _ _ Hg).
     + exact Hf.
   - destruct Hcond as [Hf Hg].
-    apply Fibrations.istruncmap_functor_prod.
+    apply istruncmap_functor_prod.
     + exact (istruncmap_mcond _ _ _ _ Hf).
     + exact (istruncmap_mcond _ _ _ _ Hg).
 Qed.
@@ -295,7 +295,7 @@ Proof.
   destruct Γ as [|A Γ];simpl.
   - intros _ _;apply _.
   - intros [[] c];simpl;intros [HA HΓ].
-    + apply Fibrations.istruncmap_compose;[apply istruncmap_subctx_into,HΓ|].
+    + apply istruncmap_compose;[apply istruncmap_subctx_into,HΓ|].
       apply istruncmap_snd,_.
     + apply istruncmap_subctx_into in HΓ. exact _.
     + apply istruncmap_subctx_into in HΓ. exact _.
@@ -495,7 +495,7 @@ Proof.
   refine (_ oE _).
   2:exact (equiv_hfiber_left _ fB _).
   rewrite eisretr.
-  apply Fibrations.equiv_hfiber_homotopic;clear y.
+  apply equiv_hfiber_homotopic;clear y.
   intros x. rewrite <-He,eissect. reflexivity.
 Qed.
 
@@ -503,7 +503,7 @@ Lemma istruncmap_homotopic {n A B} (f : A -> B) {g} `{!IsTruncMap n f} : f == g 
 Proof.
   intros Heq.
   intros y. apply (trunc_equiv' (hfiber f y));[|exact _].
-  apply Fibrations.equiv_hfiber_homotopic. exact Heq.
+  apply equiv_hfiber_homotopic. exact Heq.
 Defined.
 
 Theorem istruncmap_eval_expr {n Γ A} (e : exprS Γ A)
@@ -511,7 +511,7 @@ Theorem istruncmap_eval_expr {n Γ A} (e : exprS Γ A)
 Proof.
   intros H1 H2.
   refine (istruncmap_homotopic _ (path_mexpr_of e)).
-  apply Fibrations.istruncmap_compose.
+  apply istruncmap_compose.
   - apply istruncmap_mcond. apply mexpr_preserves_truncmaps.
     + apply cond_implies_local,H1.
     + exact H2.
